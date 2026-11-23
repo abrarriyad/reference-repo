@@ -1,45 +1,45 @@
-# 道具设定 · 怎么填
+# Prop design · how to fill it in
 
-给你原文/大纲里与道具相关的全部信息，先**选**再**填**。**只输出 JSON，不要解释、不要围栏。**结构见 `schema.md` 的 props 段。
+You are given everything the text/outline says about props. First **select**, then **fill in**. **Output JSON only — no explanation, no fences.** For the structure see the props section of `schema.md`.
 
-## 先选：什么配当叙事道具
+## Select first: what qualifies as a narrative prop
 
-三个条件**同时满足**才入选：**有特写、跨集出现、承载剧情**。一部剧通常 3–8 件，跟主角数量一个量级。
+It is selected only if **all three** conditions hold: **it gets a close-up, it recurs across episodes, and it carries the plot**. A show usually has 3–8, the same order of magnitude as the number of leads.
 
-| 类型 | 归属 | 例子 |
+| Type | Disposition | Examples |
 | --- | --- | --- |
-| **叙事道具** | 入选，单独建资产 | 皮箱（全剧悬念）、旧砚（爆点实体） |
-| 场景陈设 | 场景锚点已覆盖，不入选 | 铜铃、纸灯笼、系缆石桩 |
-| 一次性手部道具 | 镜头级提示词解决，不入选 | 一碗茶、一份报纸 |
+| **Narrative prop** | Selected; gets its own asset | The suitcase (whole-show suspense), the old inkstone (the physical embodiment of the big reveal) |
+| Set dressing | Already covered by scene anchors; not selected | Bronze bell, paper lantern, mooring stone post |
+| One-off hand prop | Solved by shot-level prompts; not selected | A bowl of tea, a newspaper |
 
-拿不准就问一句：这件东西被镜头怼着拍过吗？观众记得住它吗？剧情少了它转不动吗？三个都不是就不入选。
+When unsure, ask: has the camera ever been shoved up against this thing? Will the audience remember it? Would the plot stall without it? If none of the three is true, do not select it.
 
-## 硬规则
+## Hard rules
 
-1. **道具的形制按本剧朝代写。**`art.json` 顶层的 `dynasty` 已经定好了，直接沿用——器型、材质、工艺、纹样、装裱方式都有朝代差别，一件道具漂一个世纪，跟它同框的场景就穿帮了。**不许写「古代」这类含糊词**（理由见 `scene-pass.md` 第 1 条）。还没有 `dynasty` 时，从现有场景里推断一个具体的。
+1. **A prop's form is written for this show's dynasty.** The document-level `dynasty` in `art.json` is already set — carry it over: vessel shape, material, craft, pattern and mounting all differ by dynasty, and a prop that drifts by a century exposes the scene that shares a frame with it. **Vague words like "ancient" are not allowed** (reason in rule 1 of `scene-pass.md`). If there is no `dynasty` yet, infer a specific one from the existing scenes.
 
-2. **`summary` 写戏剧功能，不写商品描述。**「谁碰翻谁的脸的悬念核心」是戏剧功能；「棕色牛皮材质」只是材质。先说它在剧里干什么。
+2. **`summary` states dramatic function, not product description.** "The suspense core of who tips over whose face" is a dramatic function; "brown cowhide material" is just a material. Say what it does in the show first.
 
-3. **锚点要经得起特写。**道具的锚点比场景的更小更细：绿锈铜扣上的一道新划痕、墨池边的月牙磨痕。特写镜头会把这些放大到全屏，**缺了立刻穿帮，多了核对不过来**——照旧 3–5 个。
+3. **Anchors must withstand a close-up.** A prop's anchors are smaller and finer than a scene's: a fresh scratch on the verdigris copper clasp, a crescent wear mark at the edge of the ink well. A close-up blows these up to full screen, so **a missing one is exposed at once, and too many cannot be checked** — still 3–5.
 
-4. **状态变体从剧情反推。**皮箱有合上/打开，状纸有藏着/摊开——道具的状态弧跟着剧情走，每个状态一条英文提示词，会各生成一张参考。没有状态变化的道具写一个主状态即可。
+4. **Derive state variants backwards from the plot.** The suitcase has closed/open, the petition has hidden/spread out — a prop's state arc follows the plot, one English prompt per state, each generating its own reference. A prop with no state change gets one main state.
 
-5. **尺度必须写死。**`scale` 三档（手持级/桌面级/家具级），`image.prompt` 和 `image.sheet` 里**必须出现对应英文短语**（handheld scale / tabletop scale / furniture scale）——AI 把手持道具画成家具尺寸是高频事故，validate 会对着查。
+5. **Scale must be pinned down.** `scale` has three tiers (手持级 handheld / 桌面级 tabletop / 家具级 furniture), and `image.prompt` and `image.sheet` **must contain the matching English phrase** (handheld scale / tabletop scale / furniture scale) — AI drawing a handheld prop at furniture size is a frequent accident, and validate checks for it.
 
-6. **白底、无人、无手。**道具参考图要被贴进各种镜头，必须纯白背景可抠；**拿着道具的手是最常见的污染**，反向提示词必须禁 hands/fingers。validate 三样都查。
+6. **White background, no people, no hands.** Prop reference images get pasted into all kinds of shots and must have a pure white background that can be cut out; **a hand holding the prop is the most common contamination**, and the negative prompt must ban hands/fingers. validate checks all three.
 
-7. **关联要挂上。**`relatedScenes` 挂它主要出现的场景（id 必须存在），`carriedBy` 写谁带着它（自由文本）。这两样进报告，是排生成任务时查「这场戏桌上该有什么」的索引。
+7. **Hook up the associations.** `relatedScenes` lists the scenes it mainly appears in (ids must exist), `carriedBy` says who carries it (free text). Both go into the report and serve as an index when scheduling generation tasks, to look up "what should be on the table in this scene".
 
-8. **提示词永远英文，绝不出现角色名**——图像模型会把它认识的名字画进去。表面处理句跟场景是同一套两档，照抄 `scene-pass.md` 里「要整段带上的是表面处理」那两段之一——按这件东西的保养水平选，御赐的印信和船家的竹篙不是同一档；画风同样不写进提示词。
+8. **Prompts are always English and never contain character names** — image models will paint in any name they know. The surface-treatment sentence uses the same two tiers as scenes: copy one of the two passages under "what to carry over in full is the surface treatment" in `scene-pass.md` verbatim — choose by this item's level of upkeep; an imperially bestowed seal and a boatman's bamboo pole are not the same tier; art style is likewise never written into the prompt.
 
-## 输入格式
+## Input format
 
 ```
-候选道具线索（从原文/大纲摘出）：
-- 沈知微始终抱着一只旧皮箱，指节发白（第 1–6 集，开箱是收束爆点）
-- 陆行远口袋里的硬东西，第 3 集掏出是一方旧砚，砚底刻着县衙的印
-- 胡二爷的两箱货（挑着走，无特写）
-已有场景：S01 渡船船舱、S02 渡口栈桥、S03 对岸芦苇滩
+Candidate prop leads (excerpted from text/outline):
+- 沈知微 is always hugging an old leather suitcase, knuckles white (episodes 1–6; opening it is the closing reveal)
+- Something hard in 陆行远's pocket; in episode 3 he pulls out an old inkstone with the county yamen's seal carved on the bottom
+- 胡二爷's two crates of goods (carried on a shoulder pole, no close-up)
+Existing scenes: S01 ferry cabin, S02 ferry pier, S03 reed flat on the far bank
 ```
 
-上面第三条就该落选——有出场无特写，不承载剧情转折。
+The third item above should be dropped — it appears but has no close-up and carries no plot turn.

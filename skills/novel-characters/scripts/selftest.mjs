@@ -180,13 +180,13 @@ eq(viaAlias[0].name, '老周', '规范名不变');
 eq(viaAlias[0].notes.length, 2, '两边 notes 都在');
 
 // 找不到的人必须报错——静默跳过会让调用方以为合并成功了
-throws(() => applyMerges(twoLu, [{ keep: '不存在', absorb: ['陆'] }]), /找不到/, 'keep 找不到要报错');
-throws(() => applyMerges(twoLu, [{ keep: '陆行远', absorb: ['不存在'] }]), /找不到/, 'absorb 找不到要报错');
+throws(() => applyMerges(twoLu, [{ keep: '不存在', absorb: ['陆'] }]), /not found/, 'keep 找不到要报错');
+throws(() => applyMerges(twoLu, [{ keep: '陆行远', absorb: ['不存在'] }]), /not found/, 'absorb 找不到要报错');
 // 抛错前不许污染入参：部分合并成功、后面才发现找不到的人，入参也要原样
 const pristine = JSON.stringify(twoLu);
 throws(
   () => applyMerges(twoLu, [{ keep: '陆行远', absorb: ['陆'] }, { keep: '不存在', absorb: ['沈知微'] }]),
-  /找不到/,
+  /not found/,
   '部分成功再失败也要报错',
 );
 eq(JSON.stringify(twoLu), pristine, '抛错后入参没有被改动');
@@ -311,27 +311,27 @@ const hits = (cast, keyword) => validateCast(cast, SOURCE).filter((p) => p.inclu
 // 这四类是模型真实犯过的错，每一类都必须抓住
 let bad = clone();
 bad[0].persona.evidence[0] = 'She was nineteen years old.';
-ok(hits(bad, '逐字片段') > 0, '抓住意译的引文');
+ok(hits(bad, 'verbatim passage') > 0, '抓住意译的引文');
 
 bad = clone();
 bad[0].image.prompt = `${bad[0].name}, ${bad[0].image.prompt}`;
-ok(hits(bad, '人名') > 0, '抓住出图提示词里的人名');
+ok(hits(bad, 'character name') > 0, '抓住出图提示词里的人名');
 
 bad = clone();
 bad[0].image.promptLocal = `${bad[0].aliases[0]}的设定图`;
-ok(hits(bad, '人名') > 0, '抓住本地语言出图提示词里的别名');
+ok(hits(bad, 'character name') > 0, '抓住本地语言出图提示词里的别名');
 
 bad = clone();
 bad[0].image.sheet = `${bad[0].name}, a model sheet`;
-ok(hits(bad, '人名') > 0, '抓住设定图提示词里的人名');
+ok(hits(bad, 'character name') > 0, '抓住设定图提示词里的人名');
 
 bad = clone();
 bad[0].voice.timbre = 'warm husky alto';
-ok(hits(bad, '应为中文') > 0, '抓住该中文却写成英文的字段');
+ok(hits(bad, 'should be Chinese') > 0, '抓住该中文却写成英文的字段');
 
 bad = clone();
 bad[0].image.sheet = '中文设定图描述';
-ok(hits(bad, '必须英文') > 0, '抓住该英文却含中文的字段');
+ok(hits(bad, 'must be English') > 0, '抓住该英文却含中文的字段');
 
 bad = clone();
 bad[0].importance = 'sidekick';
@@ -370,13 +370,13 @@ eq((html.match(/class="rost on"/g) || []).length, 1, '左栏默认选中第一�
   const wordy = clone();
   wordy[0].voice.prompt = 'A young female voice, nineteen years old. '.repeat(12);
   ok(
-    validateCast(wordy, SOURCE).some((x) => x.includes('超过 400')),
+    validateCast(wordy, SOURCE).some((x) => x.includes('over 400')),
     '写成散文的音色提示词被拦',
   );
   const edge = clone();
   edge[0].voice.prompt = 'x'.repeat(400);
   ok(
-    !validateCast(edge, SOURCE).some((x) => x.includes('超过 400')),
+    !validateCast(edge, SOURCE).some((x) => x.includes('over 400')),
     '正好 400 字符不拦——上限是含等于',
   );
 }
@@ -388,7 +388,7 @@ eq((html.match(/class="rost on"/g) || []).length, 1, '左栏默认选中第一�
     const bad = clone();
     bad[0].voice.prompt += ` menace hidden inside ${q}`;
     ok(
-      validateCast(bad, SOURCE).some((x) => x.includes('引号台词')),
+      validateCast(bad, SOURCE).some((x) => x.includes('quoted dialogue')),
       `音色提示词里的引号台词被拦（${q.slice(0, 2)}）`,
     );
   }
@@ -649,15 +649,15 @@ for (const c of enCast) {
   c.voice.referenceHint = 'like a night-shift radio host';
 }
 ok(
-  validateCast(enCast, SOURCE, 'en').filter((p) => p.includes('应为')).length === 0,
+  validateCast(enCast, SOURCE, 'en').filter((p) => p.includes('should be')).length === 0,
   'lang=en 时英文 voice 字段合法',
 );
 ok(
-  validateCast(enCast, SOURCE, 'zh').filter((p) => p.includes('应为中文')).length > 0,
+  validateCast(enCast, SOURCE, 'zh').filter((p) => p.includes('should be Chinese')).length > 0,
   'lang=zh 时英文 voice 字段违规',
 );
 ok(
-  validateCast(CAST, SOURCE, 'en').filter((p) => p.includes('应为英文')).length > 0,
+  validateCast(CAST, SOURCE, 'en').filter((p) => p.includes('should be English')).length > 0,
   'lang=en 时中文 voice 字段违规',
 );
 // 机器字段不受 lang 影响，永远必须英文
@@ -665,7 +665,7 @@ const cjkMachine = clone();
 cjkMachine[0].image.prompt = '中文出图提示词';
 for (const l of ['zh', 'en', 'fr']) {
   ok(
-    validateCast(cjkMachine, SOURCE, l).filter((p) => p.includes('必须英文')).length > 0,
+    validateCast(cjkMachine, SOURCE, l).filter((p) => p.includes('must be English')).length > 0,
     `lang=${l} 时 image.prompt 仍必须英文`,
   );
 }
@@ -703,7 +703,7 @@ eq(validateCast(CAST, SOURCE, 'zh').length, 0, '样例四个角色的提示词�
   const dup = clone();
   dup[1].image.prompt = dup[0].image.prompt;
   ok(
-    validateCast(dup, SOURCE, 'zh').some((x) => x.includes('出图提示词雷同')),
+    validateCast(dup, SOURCE, 'zh').some((x) => x.includes('near-duplicate image prompt')),
     '两个角色的出图提示词完全相同会报错',
   );
 }
@@ -714,7 +714,7 @@ eq(validateCast(CAST, SOURCE, 'zh').length, 0, '样例四个角色的提示词�
     .replace(/nineteen-year-old/g, 'twenty-two-year-old')
     .replace(/navy-blue/g, 'dark green');
   ok(
-    validateCast(near, SOURCE, 'zh').some((x) => x.includes('出图提示词雷同')),
+    validateCast(near, SOURCE, 'zh').some((x) => x.includes('near-duplicate image prompt')),
     '只改几个词的出图提示词照样被拦',
   );
 }
@@ -722,7 +722,7 @@ eq(validateCast(CAST, SOURCE, 'zh').length, 0, '样例四个角色的提示词�
   const dupVoice = clone();
   dupVoice[1].voice.prompt = dupVoice[0].voice.prompt;
   ok(
-    validateCast(dupVoice, SOURCE, 'zh').some((x) => x.includes('音色提示词雷同')),
+    validateCast(dupVoice, SOURCE, 'zh').some((x) => x.includes('near-duplicate voice prompt')),
     '两个角色的音色提示词相同也会报错',
   );
 }
@@ -731,7 +731,7 @@ eq(validateCast(CAST, SOURCE, 'zh').length, 0, '样例四个角色的提示词�
   const dupSheet = clone();
   dupSheet[1].image.sheet = dupSheet[0].image.sheet;
   ok(
-    !validateCast(dupSheet, SOURCE, 'zh').some((x) => x.includes('雷同')),
+    !validateCast(dupSheet, SOURCE, 'zh').some((x) => x.includes('near-duplicate')),
     'image.sheet 相同不报错——它的固定排版文本占比太高，设门必然误拦',
   );
 }
@@ -741,7 +741,7 @@ eq(validateCast(CAST, SOURCE, 'zh').length, 0, '样例四个角色的提示词�
   tiny[0].image.prompt = 'a man';
   tiny[1].image.prompt = 'a man';
   ok(
-    !validateCast(tiny, SOURCE, 'zh').some((x) => x.includes('出图提示词雷同')),
+    !validateCast(tiny, SOURCE, 'zh').some((x) => x.includes('near-duplicate image prompt')),
     '词数太少的提示词不参与雷同判定',
   );
 }

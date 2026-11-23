@@ -1,100 +1,100 @@
-# 提示词：哪些写法是实测出来的
+# Prompts: which phrasings were found by testing
 
-提示词由 `buildPrompt`（`scripts/core.mjs`）按视图拼，**模型不写提示词，只填角色字段**。
-改模板之前先读这里——每一条都是某一轮实测失败换来的。
+Prompts are assembled per view by `buildPrompt` (`scripts/core.mjs`), and **the model does not write prompts, it only fills in the character fields**.
+Read this before changing the templates — every item here was bought by some round of failed testing.
 
-实测环境：Qwen Image 2.1（ComfyUI，`TextEncodeQwenImageEditPlus` 挂参考图）和 codex 内置出图（GPT），
-角色覆盖 19 岁民国女学生、70 岁老船夫、28 岁军人、16 岁采茶姑娘，多个种子。
+Test environment: Qwen Image 2.1 (ComfyUI, `TextEncodeQwenImageEditPlus` with attached reference images) and codex built-in image generation (GPT),
+with characters covering a 19-year-old Republic-era schoolgirl, a 70-year-old old boatman, a 28-year-old soldier and a 16-year-old tea-picking girl, with multiple seeds.
 
-## 总结构
+## Overall structure
 
-| 视图 | 第一句 | 参考图 | 比例 |
+| View | First sentence | Reference image | Ratio |
 | --- | --- | --- | --- |
-| 正面全身（锚点） | Full-body front view: she stands naturally facing the camera… | 无，文生图 | 2:3 |
-| 正脸大头照 | Zoom in to an extreme close-up head-and-shoulders portrait, passport-photo framing… | 锚点 | 4:5 |
-| 90° 侧面 | Full-body side profile… both face the right edge of the image | 锚点 | 2:3 |
-| 背面 | Rotate the camera 180 degrees around her… | 锚点 | 2:3 |
-| 细节 | Zoom in to an extreme close-up of only … | 锚点（头发 / 脸 / 领口另挂大头照） | 1:1 |
-| 45° 大头照 | 同正脸大头照，再加 45° 的几何描述 | 锚点 | 4:5 |
+| Front full-body (anchor) | Full-body front view: she stands naturally facing the camera… | None, text-to-image | 2:3 |
+| Front headshot | Zoom in to an extreme close-up head-and-shoulders portrait, passport-photo framing… | Anchor | 4:5 |
+| 90° profile | Full-body side profile… both face the right edge of the image | Anchor | 2:3 |
+| Back | Rotate the camera 180 degrees around her… | Anchor | 2:3 |
+| Detail | Zoom in to an extreme close-up of only … | Anchor (hair / face / collar also attach the headshot) | 1:1 |
+| 45° headshot | Same as the front headshot, plus a geometric description of 45° | Anchor | 4:5 |
 
-锚点把全部角色字段写成完整描述；派生图只写「做什么改动」+ 一句短的一致性清单 + 画风层。
+The anchor writes all the character fields as a complete description; derived images write only "what change to make" + one short consistency list + the art-style layer.
 
-## 改图模型只听第一句
+## The edit model listens only to the first sentence
 
-参考图的构图力量很强，模型默认照着参考图重画一张差不多的。**只有第一句明确要求改构图，它才改。**
+The reference image's compositional pull is very strong, and by default the model redraws something close to the reference. **Only when the first sentence explicitly asks for a change of composition does it change.**
 
-- 大头照：第一句必须是 `Zoom in to an extreme close-up head-and-shoulders portrait, passport-photo framing`，
-  再写可量化的取景：头顶贴近上边、下巴在画面高度正中、下边切在锁骨。只写 close-up 会出成半身
-- **正面也要写成几何**：锚点写「肩、髋、脚都正对镜头，鼻子在脸的中线上，两只耳朵一样可见」，反向词禁 three-quarter view / turned body / contrapposto。
-  只写 facing the camera 时，动漫画风会按「官方角色图」的习惯把锚点画成微侧身，大头照照着锚点改，也跟着侧过去 20–30°，几乎和 45° 那张一样（实测）。
-  正脸大头照同样写几何、禁侧脸；**取景写在几何前面，结尾再重申一次取景**——几何写长了会冲淡开头的「拉近」，镜头退回半身（实测）
-- 背面：`Rotate the camera 180 degrees around her`，再写**只有背面看得到的东西**（辫子垂在背后、衣服背面、脚跟），
-  反向词禁 face / buttons / pockets。不写这些 Qwen 会出成正面
-- 侧面：写全身和头都朝画面右侧、只看得到右半边脸、不看镜头。不写「不看镜头」会回头看
-- 45°：使用几何线索——鼻尖指向画面左侧、左耳可见、右耳隐藏。Qwen 上偏小（约 30°），GPT 更准
-- 细节：第一句 `Zoom in to an extreme close-up of only <部位>`，再写画面边界（铺满画面、看不到脸 / 只看到脚和脚踝）
+- Headshot: the first sentence must be `Zoom in to an extreme close-up head-and-shoulders portrait, passport-photo framing`,
+  then write quantifiable framing: the top of the head close to the upper edge, the chin at the exact middle of the frame height, the lower edge cutting at the collarbone. Writing only close-up comes out as a half-body
+- **The front also has to be written as geometry**: the anchor says "shoulders, hips and feet all squarely facing the camera, the nose on the midline of the face, both ears equally visible", and the negative words ban three-quarter view / turned body / contrapposto.
+  With only "facing the camera" written, the anime art style draws the anchor slightly turned, in the habit of an "official character image", and the headshot edited from the anchor turns 20–30° too, almost the same as the 45° one (found in testing).
+  The front headshot is likewise written as geometry with profile banned; **put the framing before the geometry, and restate the framing again at the end** — long geometry dilutes the "zoom in" at the start, and the camera backs off to a half-body (found in testing)
+- Back: `Rotate the camera 180 degrees around her`, then write **only what can be seen from the back** (the braid hanging down the back, the back of the clothes, the heels),
+  with the negative words banning face / buttons / pockets. Without these, Qwen comes out as the front
+- Profile: write that the whole body and head both face the right side of the frame, only the right half of the face is visible, and she does not look at the camera. Without "does not look at the camera" she looks back
+- 45°: use geometric cues — the nose tip pointing to the left of the frame, the left ear visible, the right ear hidden. On Qwen it falls short (about 30°), and GPT is more accurate
+- Detail: the first sentence `Zoom in to an extreme close-up of only <part>`, then write the frame boundaries (filling the frame, no face visible / only the feet and ankles visible)
 
-## 一致性清单要短，按视图取层
+## Keep the consistency list short, taking layers by view
 
-- **不要把锚点的长描述整段重复进派生图。**一句「Keep her exactly the same person as in the reference image: 脸、发型、上装、下装」就够
-- **大头照只写脸、头发、上装。**写了下装和鞋，模型就把镜头拉远去画它们（实测：带上全部服装和四个细节，大头照出成了半身）
-- **细节图不列整套服装**，只写一句 `Same person, same clothing and materials as in the reference image`。
-  第一轮细节图 8/8 失败，就是因为一致性那段列了整套衣服，模型照着画了整个人
-- 细节图反向词禁 face / head / portrait / full body / standing figure / wide shot / medium shot；
-  挨着脸的细节（头发、脸上的东西）只禁 full body / whole face
+- **Do not repeat the anchor's long description whole in the derived images.** One sentence, "Keep her exactly the same person as in the reference image: face, hairstyle, top, bottoms", is enough
+- **The headshot writes only face, hair and top.** If bottoms and shoes are written, the model pulls the shot back to draw them (found in testing: with all the clothing and the four details included, the headshot came out as a half-body)
+- **Detail images do not list the whole outfit**, only one sentence, `Same person, same clothing and materials as in the reference image`.
+  The first round of detail images failed 8/8 because the consistency passage listed the whole outfit, and the model drew the whole person
+- The negative words of detail images ban face / head / portrait / full body / standing figure / wide shot / medium shot;
+  for details next to the face (hair, things on the face), ban only full body / whole face
 
-## 写实（画风层「方案四」）
+## Realistic (art-style layer "option four")
 
-用户拍板的基线（2026-09-26）。整段在 `DEFAULT_LOOK`，`look-template` 打印出来：
+The baseline settled by the user (2026-09-26). The whole passage is in `DEFAULT_LOOK`, printed by `look-template`:
 
-- 不写 photorealistic、超高清、浅景深——前者会往 CG 渲染带。直接写 `A real photograph, not a render` + 全画幅、85mm、f/5.6、真实白平衡、不修图不美颜、轻微颗粒
-- 光写成有方向的主光 + 弱补光（脸和衣服有体积），背景仍是打到纯白的无缝背景纸
-- 反向词压 AI 感：CGI、塑料皮肤、蜡质皮肤、娃娃脸、过度对称、HDR、过饱和、平光
-- **皮肤粗糙程度不放画风层**，放角色的 `skin`：统一写「泛红、小瑕疵」会让年轻角色出成病容
-- **写光的效果，不写光源**：写 window 会把窗户画进画面
+- Do not write photorealistic, ultra-HD or shallow depth of field — the former drifts toward CG rendering. Write directly `A real photograph, not a render` + full frame, 85mm, f/5.6, true white balance, no retouching or beautifying, slight grain
+- Light is written as a directional key light + a weak fill (giving the face and clothes volume), with the background still a seamless backdrop paper blown out to pure white
+- The negative words suppress the AI look: CGI, plastic skin, waxy skin, baby face, over-symmetry, HDR, oversaturation, flat light
+- **How rough the skin is does not belong to the art-style layer**, it belongs to the character's `skin`: writing a uniform "flushed, minor blemishes" makes young characters come out looking ill
+- **Write the effect of the light, not the light source**: writing window draws the window into the frame
 
-## 动漫（画风层 `anime`）
+## Anime (art-style layer `anime`)
 
-**默认画风**（用户 2026-09-26 定）。写实用 `--look 写实`。
+The **default art style** (settled by the user on 2026-09-26). For realistic use `--look 写实`.
 
-2026-09-26 在 Qwen 上用阿禾跑完四档（9 张），全部过门，看图角度、取景、服装一致性都对：
+On 2026-09-26, Aho (阿禾) was run through all four tiers on Qwen (9 images), all passing the gates, and viewing the images the angles, framing and clothing consistency were all right:
 
-- 写成「日式电视动画的官方角色图」：干净等粗线稿、一层柔影加少量硬高光的赛璐璐上色、平涂、动画式眼睛、简化的鼻子和嘴
-- **不写 model sheet / turnaround / character sheet**——这几个词会让模型在一张图里画多个视图；反向词里还专门压了 character sheet、multiple views
-- 反向词压写实：photograph、photorealistic、pores、film grain、3D render、semi-realistic
-- `medium: drawn`：提示词里**不写角色的皮肤层**（毛孔、雀斑会把画面往写实拽），头发细节不写 macro photo
-- 写实版里 Qwen 把领口粗布画成丝绒的问题，动漫版没有出现
-- 45° 大头照同样转不够（约 20–30°），和写实版一样是 Qwen 的问题
+- Written as "an official character image from a Japanese TV anime": clean, even-weight linework, cel colouring with one layer of soft shadow and a few hard highlights, flat fills, anime-style eyes, simplified nose and mouth
+- **Do not write model sheet / turnaround / character sheet** — these words make the model draw several views in one image; the negative words also specifically suppress character sheet and multiple views
+- The negative words suppress realism: photograph, photorealistic, pores, film grain, 3D render, semi-realistic
+- `medium: drawn`: **the character's skin layer is not written in the prompt** (pores and freckles drag the image toward realism), and hair detail does not write macro photo
+- The problem in the realistic version of Qwen drawing coarse collar cloth like velvet did not appear in the anime version
+- The 45° headshot likewise does not turn enough (about 20–30°), the same as the realistic version, a Qwen issue
 
-画风层只管「怎么画」；「画谁」全在角色层。同一份阿禾的输入，换预设就能出两种画法，不用改任何角色字段。
+The art-style layer governs only "how to draw"; "who to draw" is entirely in the character layer. With the same Aho input, switching the preset gives two ways of drawing, without changing any character field.
 
-## 细节图露出的皮肤
+## Skin exposed in detail images
 
-Qwen 画领口、袖口、脚踝时，露出来的皮肤容易画老（没有脸做参照，年龄感丢了）。
-领口、袖口、鞋三类细节加了一句 `Any visible skin is the skin of a 16-year-old.`（年龄取角色字段）。
-16 岁样例上袖口和脚踝的皮肤都对了。
+When Qwen draws collars, cuffs and ankles, the exposed skin tends to be drawn old (with no face as a reference, the sense of age is lost).
+The three kinds of details — collar, cuff, shoes — have the sentence `Any visible skin is the skin of a 16-year-old.` added (the age taken from the character field).
+On the 16-year-old sample, the skin at the cuff and ankle came out right.
 
-## 自定义细节（2026-09-26，Qwen）
+## Custom details (2026-09-26, Qwen)
 
-自定义细节按 `part` 套取景，和默认槽位同一个套路（第一句只写这个部位、写清画面边界）：
+Custom details take their framing by `part`, the same routine as the default slots (the first sentence writes only this body part and states the frame boundaries clearly):
 
-- 手（指尖染绿）2/2、腰（短袄下摆压裤腰）2/2、身体（胸前钢笔）2/2 都出对了；钢笔取景偏宽，带到下巴
-- **脸部局部（眼镜）全部失败**：三种写法（普通、写死「发际线下巴耳朵都在画外」、只挂锚点不挂大头照）× 2 个种子，全部画成整张大头照。
-  脸上的特征本来就在正脸大头照里看得清，所以不开放 `part: face`
+- Hand (green-stained fingertips) 2/2, waist (a short jacket's hem pressing the trouser waist) 2/2, body (a fountain pen on the chest) 2/2 all came out right; the pen's framing is wide and reaches the chin
+- **Facial parts (glasses) failed entirely**: three phrasings (plain, writing it hard that "the hairline, chin and ears are all out of frame", and attaching only the anchor and not the headshot) × 2 seeds all drew a whole headshot.
+  Facial features are already clearly visible in the front headshot, so `part: face` is not opened up
 
-## 已知短板
+## Known weak spots
 
-- 小疤痕：写成「愈合多年的旧疤：细、平、略浅、几乎不凸」有改善，仍偶尔像缝过线的新伤
-- 双排扣这种大面积细节：两个种子取景都偏远
-- 细节部位写太大（「斜襟和一排扣子」）会把整个前胸框进来——写小（「小立领和喉下一颗扣」）
-- Qwen 的领口细节会把粗布画出褶皱反光、像丝绒（两个角色都出现过）；GPT 出同一张材质是对的，领口不满意就 `--model codex` 重出这一张
-- 同一组派生图里混用 Qwen 与 GPT：衔接得上，细节图之间有轻微亮度差
+- Small scars: writing "an old healed scar: thin, flat, slightly paler, barely raised" improves it, but it still occasionally looks like a freshly stitched wound
+- Large-area details such as double-breasted buttons: both seeds framed too far out
+- Writing the detail part too large ("the diagonal placket and a row of buttons") frames the whole chest — write it small ("the small standing collar and a button below the throat")
+- Qwen's collar details draw coarse cloth with fold highlights, like velvet (it has happened with two characters); GPT renders the same material correctly, so if the collar is unsatisfactory, regenerate that one with `--model codex`
+- Mixing Qwen and GPT within one set of derived images: it connects up, with a slight brightness difference between detail images
 
-## 参考图怎么挂
+## How to attach reference images
 
-- **一张图只参考锚点**，头发 / 脸 / 领口细节再加确认过的大头照。图与图之间不链式参考——链式会累积漂移，也会让单张重出牵连一串
-- 大头照缺失或过期时，这几张退回只挂锚点，不阻塞，记录里留注
-- 不用拼好的多视图大图当参考：单人时 Qwen 能认出是同一人，但会把景别往全身带、脸被摊小；分开挂最像
-- **多人同框更不能用拼接图**（2026-09-26，Qwen 旧编码节点，两人两个镜头各 2 个种子）：每人一张「大头照 + 三视图」拼接图，
-  4 张里 3 张画出 3–4 个人（拼接图里的每个视图被当成一个人），而且女主被男主吃掉。每人只挂锚点也会串：一个人的脸和衣服串到另一个人身上。
-  只有「女主大头照 + 锚点、男主锚点」这组 4/4 全对。拼接参考图因此没有做进 skill
+- **An image references only the anchor**, with hair / face / collar details also adding the confirmed headshot. Images are not chained to one another — chaining accumulates drift and would make a single regeneration drag a string of others along
+- When the headshot is missing or stale, these images fall back to attaching only the anchor, without blocking, with a note left in the record
+- A pre-assembled multi-view sheet is not used as a reference: for a single person Qwen can tell it is the same person, but it pulls the framing toward full-body and the face comes out small; attaching them separately is the closest likeness
+- **Multi-person frames can use even less of a stitched image** (2026-09-26, Qwen's old encoding node, two people in two shots, 2 seeds each): with a stitched "headshot + turnaround" image per person,
+  3 of 4 images drew 3–4 people (each view in the stitched image was treated as a person), and the female lead was swallowed by the male lead. Attaching only the anchor per person also cross-contaminates: one person's face and clothes bled onto another.
+  Only the group "female lead's headshot + anchor, male lead's anchor" was 4/4 all correct. Stitched reference images were therefore not built into the skill

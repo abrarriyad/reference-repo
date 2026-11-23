@@ -1,69 +1,70 @@
-# 角色设定图的版面规格
+# Layout spec for the character model sheet
 
-`image.sheet` 是**给出图模型的完整版面指令**，本 skill 只负责把它写对，**不负责出图**。
-出图在下游（要选模型、画风、画幅，这三件事在这一层一个都答不了）。
+`image.sheet` is the **complete layout instruction for the image model**; this skill is only responsible for writing it correctly, **not for generating the image**.
+Generation is downstream (it has to pick a model, a style and an aspect ratio, and this layer cannot answer any of those three).
 
-下面这些约束必须逐条写进 `image.sheet` 的英文正文。它们都是被真实输出打出来的——
-不写死，模型就会各自发挥，而且总往同一个方向崩。
+The constraints below must all be written into the English body of `image.sheet` one by one. They were all hammered out by real output —
+left unwritten, the model improvises, and always breaks in the same direction.
 
-## 每个角色一张图
+## One image per character
 
-一张横构图，内部左右分栏：
+One landscape canvas, split left and right internally:
 
 ```
 ┌──────────┬────────────────────────────┐
-│          │   正视    侧视    背视       │
-│  半身像   │                            │
-│ （证件照） ├────────────────────────────┤
-│  面部基准  │  细节 · 细节 · 细节 · 细节   │
+│          │   front   side    back      │
+│  bust    │                            │
+│ portrait ├────────────────────────────┤
+│ (ID photo)│  detail · detail · detail · detail │
+│  facial  │                            │
+│ baseline │                            │
 │   ~34%   │                            │
 └──────────┴────────────────────────────┘
                     16:9
 ```
 
-左栏的半身像是**面部设计的基准**，右栏三视图的脸照着它画。
+The bust portrait in the left column is the **facial design baseline**, and the faces in the right-hand turnaround are drawn to match it.
 
-## 主体信息不能在排版时缩水
+## Subject information must not shrink in the layout
 
-`image.sheet` 的主体段必须承接 `image.prompt` 中的年龄、身份对应的服饰、面料品质、发饰、随身物件与仪态，不能只保留衣服颜色和发髻。三个区是同一身份、同一场合、同一套装束；原文明确的便装、乔装或落难状态同样保留，不擅自换成礼服。细节条优先展示能辨认这个人的特征，不能为了填满细节格凭空添加补丁、磨损或饰物。
+The subject paragraph of `image.sheet` must carry over from `image.prompt` the age, identity-appropriate clothing, fabric quality, hair ornament, carried objects and bearing; it must not retain only clothing colour and a hair bun. All three zones are the same identity, the same occasion and the same outfit; a plain-clothes, disguised or down-and-out state stated in the source is likewise kept, and must not be replaced with formal dress without cause. The detail strip prioritises features that identify this person, and must not add patches, wear or ornaments out of thin air just to fill the detail cells.
 
-## 背景：白底
+## Background: white
 
-一律**纯白背景**。理由有三个：抠图干净、印出来是设定表该有的样子、在深色报告里也能读。
-`image.sheet` 里写死 `plain pure white background`，不要改成灰底或场景背景。
+Always a **pure white background**. There are three reasons: clean cut-out, it prints the way a model sheet should, and it stays readable inside a dark report.
+Hard-wire `plain pure white background` in `image.sheet`; do not change it to a grey or scene background.
 
-## 分区光照
+## Per-zone lighting
 
-设定表要平光（抠图、量比例），体积感要方向光。两者矛盾，所以**分区解决**：左栏半身像给柔和
-方向主光 + 环境遮蔽，右侧三视图和细节条保持平光正交。提示词里是两句独立的
-`LIGHTING IN THE LEFT ZONE ONLY` / `LIGHTING IN THE RIGHT ZONES`，**不要合并成一句全局光照**。
+A model sheet wants flat light (cut-out, proportion measurement), while volume wants directional light. These conflict, so **solve it per zone**: give the left-column bust portrait a soft
+directional key light + ambient occlusion, and keep the right-hand turnaround and detail strip in flat orthographic light. In the prompt these are two separate sentences,
+`LIGHTING IN THE LEFT ZONE ONLY` / `LIGHTING IN THE RIGHT ZONES`; **do not merge them into one global lighting sentence**.
 
-## 比例 ⚠️
+## Proportions ⚠️
 
-这个版面最容易崩的就是比例——模型为了把细节条塞进去，会把三个全身像压扁或拉长。必须写死
-`PROPORTIONS ARE CRITICAL`、`no stretching, squashing or foreshortening`、
-`the detail studies give way, not the figures`。
+The thing that most easily breaks in this layout is proportion — to fit the detail strip in, the model will squash or stretch the three full-body figures. Hard-wire
+`PROPORTIONS ARE CRITICAL`, `no stretching, squashing or foreshortening`,
+`the detail studies give way, not the figures`.
 
-## 左栏的收口 ⚠️
+## Closing off the left column ⚠️
 
-模型默认会把半身像的两侧肩膀裁掉、底边做成圆角或渐隐晕影，看着很别扭。必须显式禁掉：
-肩膀完整、两侧留空、底边齐平直切。**这条不写就一定会出问题。**
+By default the model will crop the shoulders on either side of the bust portrait and give the bottom edge rounded corners or a fading vignette, which looks awkward. Explicitly forbid it:
+shoulders complete, space on both sides, bottom edge cut flat and level. **Leave this out and it will always go wrong.**
 
-## 面部一致性 ⚠️
+## Facial consistency ⚠️
 
-一张图里出现两个长相是这个版面最容易出的问题——左栏画一个人、右栏画另一个人。必须写死
-`must match the bust portrait exactly — same features, same hairstyle, same expression`。
+Two faces in one image is the problem that most easily arises in this layout — one person drawn in the left column, another on the right. Hard-wire
+`must match the bust portrait exactly — same features, same hairstyle, same expression`.
 
-## 画风不在这里
+## Visual style is not here
 
-**`image.sheet` 里不写画风。** 画风是出图那一刻由调用方整批附加在提示词前面的一层，
-写进这里只会跟当时选的那一档打架，而且换风格要逐条改。细节见 `profile-pass.md`。
+**Do not write visual style in `image.sheet`.** Style is a layer the caller prepends to the prompt for the whole batch at generation time; written in here it only fights whatever style was chosen then, and changing style would mean editing every entry. For detail see `profile-pass.md`.
 
-同一批角色的画风一致性因此也是下游的事：整批共用同一段风格指令，必要时再拿第一张成图
-当参考图压一压。这一层管的是「这个人长什么样、这张表怎么排」。
+Style consistency across a batch of characters is therefore also downstream work: share one style instruction across the whole batch, and when necessary use the first finished image
+as a reference to hold it in place. This layer handles "what this person looks like, and how this sheet is laid out".
 
-## 文件名
+## Filenames
 
-`render` 默认去 cast.json 同级的 `images/<slug>-sheet.png` 找图，找到就嵌进 report.html；
-图在别处就用 `--images <目录>` 指过去。本 skill 不产生这些文件，下游出完图重跑 `render` 就能捡起来。
-`node scripts/novel-characters.mjs slug "<角色名>"` 生成安全文件名（中文会保留）。
+`render` looks for images at `images/<slug>-sheet.png` next to cast.json by default, and embeds them into report.html when found;
+if the images are elsewhere, point at them with `--images <dir>`. This skill does not produce these files; once downstream has generated the images, re-run `render` and it picks them up.
+`node scripts/novel-characters.mjs slug "<character name>"` produces a safe filename (Chinese is preserved).

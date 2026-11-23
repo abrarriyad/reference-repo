@@ -1,40 +1,40 @@
-# storyboard-report.html 设计约定
+# storyboard-report.html design conventions
 
-与另外四份报告同一套视觉语言。改样式前先读这份，别凭感觉发挥。
+The same visual language as the other four reports. Read this before changing styles; do not improvise.
 
-## 基调
+## Tone
 
-- 冷灰印张 + 铁锈红印记：`--paper:#eceded` `--panel:#f5f6f5` `--seal:#8a3324` `--seal-2:#c56a4e` `--ok:#3d6b4f`。配色跑过可视化验证器，别私自换色
-- 页宽 1600，衬线标题 + 无衬线正文，零外部依赖，离线双击能开
-- 模型产出的每一个字都过 `esc()`；内嵌 JSON 的 `<` 转 `<` 防 `</script` 截断
+- Cold grey stock + rust-red seal: `--paper:#eceded` `--panel:#f5f6f5` `--seal:#8a3324` `--seal-2:#c56a4e` `--ok:#3d6b4f`. The palette has been through a visualisation validator; do not change colours on your own
+- Page width 1600, serif headings + sans-serif body, zero external dependencies, opens offline by double-click
+- Every character the model produces goes through `esc()`; `<` in embedded JSON becomes `<` to prevent `</script` truncation
 
-## 区块顺序
+## Section order
 
-KPI 带 → 01 镜头节奏带 → 02 分集分镜表 → 03 生成批次单 → 04 配音对齐单 → 05 质量门。
+KPI band → 01 cut rhythm strip → 02 per-episode storyboard table → 03 generation batch list → 04 audio alignment list → 05 quality gates.
 
-## 分镜节奏带（招牌图）
+## Cut rhythm strip (the signature chart)
 
-- 每集一行：`E01 | 色带 | 合计`。色带按**生成段**分组（`.rseg` 粗分隔 = 段边界 = 一次生成），组内每个分镜一片，**片宽 = 分镜时长 ÷ 全集时长**，颜色 = 铁锈红按景别透明度分档（大远景 0.25 → 大特写 1.0）——深浅相间、长短相间就是好节奏，一眼可读
-- 片是 `<a href="#seg-段号">`，点击跳到段卡；悬停 title 带段号#切序/秒数/景别/运镜
+- One row per episode: `E01 | colour band | total`. The band is grouped by **generation segment** (`.rseg` thick separator = segment boundary = one generation), with one slice per cut inside a group, **slice width = cut duration ÷ episode duration**, colour = rust red tiered by shot size using opacity (extreme wide 0.25 → extreme close 1.0) — alternating depth and alternating length is what makes a good rhythm, readable at a glance
+- Slices are `<a href="#seg-<segment id>">`; clicking jumps to the segment card; the hover title carries segment id#cut index / seconds / shot size / camera move
 
-## 分集分镜表
+## Per-episode storyboard table
 
-- 每集一个块，**段卡**两列网格（`repeat(2,minmax(0,1fr))`，窄屏降档）；段卡区默认最多 760px 截断 + 渐隐 + 「展开全部段 / 收起」开关，加载后不超高的集自动放开并移除按钮
-- 段卡：段头（段号 + 总秒·切数徽章 + 场景/光照 chips + 节拍认领范围）→ **主分镜图**按顶层 `aspectRatio` 排版（默认 16:9，竖屏剧 9:16；竖屏主图收窄居中，批次卡的场景设定图始终 16:9；旧数据的 `_meta.orientation` 与 frame 末尾标签只作兼容）（`<段号>/f1.png`，缺图显示「主分镜图 · #1 未生成」+ 提示词占位——**不猜、不骗**）→ **子分镜条**（`.subs` 四列缩略格，f2 起逐格，缺图小占位。类名是 `subf`——`sub` 会撞页眉的 `.sub`，踩过）→ **五五分栏**（`.duo`，`repeat(2,minmax(0,1fr))`）：左列分镜行（#序号、`0.00s 起 · 3s`、景别·运镜、人物道具 chips、画面摘要**从剧本认领的节拍自动带出**、悬停出现分镜图提示词复制），右列**提示词面板**——两个页签并列：H3（`h3Prompt` 原样）与 Seedance（程序现拼），默认 H3，复制键读当前激活的页签，列表超高自带细滚动条。分镜行在切头下方多一行构图量化字段（`.scomp`，焦距 · 机位 · 构图 · 视线 · 焦点 · 稳定性）；段卡在分镜图下方显示走位（`.seg-block`）
-- `imageExists` 由 CLI 注入（render 时检查工作目录），renderHtml 本体不碰文件系统——可测性
+- One block per episode, **segment cards** in a two-column grid (`repeat(2,minmax(0,1fr))`, stepping down on narrow screens); the segment card area is clipped at 760px by default with a fade and a "show all segments / collapse" toggle, and episodes that are not too tall after loading open automatically with the button removed
+- Segment card: segment header (segment id + total seconds · cut count badge + scene/lighting chips + beat claim range) → **master frame** laid out per the top-level `aspectRatio` (16:9 by default, 9:16 for a vertical drama; a vertical master frame is narrowed and centred, while the batch card's scene sheet is always 16:9; older data's `_meta.orientation` and the tag at the end of frame are compatibility only) (`<segment id>/f1.png`; when missing, show "master frame · #1 not generated" + a prompt placeholder — **never guess, never pretend**) → **sub-frame strip** (`.subs` four-column thumbnail grid, frame by frame from f2, with a small placeholder when missing. The class name is `subf` — `sub` collides with the header's `.sub`, hit in production) → **50/50 split** (`.duo`, `repeat(2,minmax(0,1fr))`): left column is the cut rows (#index, `from 0.00s · 3s`, shot size · camera move, character/prop chips, picture summary **brought out automatically from the beats claimed from the script**, hover shows a frame-prompt copy), right column is the **prompt panel** — two tabs side by side: H3 (`h3Prompt` as-is) and Seedance (assembled by program), H3 by default, the copy button reads the currently active tab, and a long list gets its own thin scrollbar. Below the cut head, the cut row gets one more row of composition quantified fields (`.scomp`, focal length · camera position · composition · eyeline · focus · stability); below the frame, the segment card shows blocking (`.seg-block`)
+- `imageExists` is injected by the CLI (checking the working directory at render time); renderHtml itself never touches the filesystem — testability
 
-## 生成批次单
+## Generation batch list
 
-- 同场景 + 同光照一批，两列卡片；有 `--art` 且在 `--images` 指定的目录（默认 `./images`）里找到场景设定图就嵌图（点击放大）
-- 批次卡：编号 + 场景/光照 chips + 段号 chips（可点跳转）+ 一句「需要：谁的角色设定图 · 哪些道具」
+- Same scene + same lighting form one batch, in two-column cards; with `--art` and a scene sheet found in the directory given by `--images` (`./images` by default), embed the image (click to enlarge)
+- Batch card: number + scene/lighting chips + segment id chips (clickable to jump) + one line "Needs: whose character sheets · which props"
 
-## 配音对齐单
+## Audio alignment list
 
-- 一张表：段号#切序（可点）/ 说话人 / 台词（衬线）/ 台词秒数——TTS 音频对到哪一段的第几切，全部自动汇总
+- One table: segment id#cut index (clickable) / speaker / dialogue (serif) / dialogue seconds — which segment and cut each TTS clip lands on, all auto-summarised
 
-## 质量门与交互
+## Quality gates and interaction
 
-- 页眉徽章 + 病灶横幅 + 文末清单，对账门缺上游时「跳过（视为通过）」小字明说
-- lightbox 点图放大（首帧图 + 批次场景图共用），Esc 关闭
-- 复制按钮 `.copy[data-copy]` 事件委托；导出 JSON 内嵌 Blob 下载，`revokeObjectURL` 延迟 10 秒
-- `@media print`：截断全展开、按钮隐藏、镜头卡双列、白底；`prefers-reduced-motion` 关动效
+- Header badge + lesion banner + a list at the end of the document; when an audit gate lacks upstream input, say so in small print: "skipped (treated as passing)"
+- Lightbox enlarges an image on click (shared by first frames and batch scene images), Esc closes
+- Copy buttons `.copy[data-copy]` with event delegation; export JSON embedded Blob download, `revokeObjectURL` delayed 10 seconds
+- `@media print`: expand all clipped areas, hide buttons, two-column shot cards, white background; `prefers-reduced-motion` disables animation

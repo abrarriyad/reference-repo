@@ -1,55 +1,55 @@
-# 切镜：一集怎么分段、怎么切
+# Cutting: how to segment an episode and how to cut it
 
-一次任务切一集。你拿到 seedScenes 工作底稿（每场的节拍清单：编号、动作/台词、每拍秒数、说话人）、场景卡、角色卡。产出：把这一集的 `segments` 从空切满，然后删掉 `seedScenes`。
+One task cuts one episode. You are given the seedScenes worksheet (each scene's beat list: number, action/dialogue, seconds per beat, speaker), the scene cards and the character cards. Deliverable: cut this episode's `segments` from empty to full, then delete `seedScenes`.
 
-## 先分段，再切镜
+## Segment first, then cut
 
-1. **段 = 一次生成调用**，≤ 15 秒，不跨场次。先把每场的节拍按剧情单元分组（一次交锋、一次进场、一次收尾），每组 9–15 秒就是一段。
-2. **段内切分镜**，每切 2–5 秒（硬门），围着 3 秒打。一段通常 3–5 切。
-3. **每切一张分镜图**：第 1 切的是主分镜图（钉 0.00 秒），其余子分镜图钉在各自切点。生成时全套喂给 H3，段内每一格的构图都由图控制，不靠文字赌。
+1. **A segment = one generation call**, ≤ 15s, never crossing scenes. First group each scene's beats by story unit (one exchange, one entrance, one wrap-up); each group of 9–15s is one segment.
+2. **Cut shots inside the segment**, each cut 2–5s (hard gate), aiming around 3s. A segment is usually 3–5 cuts.
+3. **One frame per cut**: the first cut is the master frame (pinned at 0.00s), the rest are sub-frames pinned at their own cut marks. At generation time the full set is fed to H3, so every frame's composition inside the segment is controlled by the image, not gambled on text.
 
-## 硬规则
+## Hard rules
 
-1. **认领是地基。** 每个分镜声明 `beats:[起,止]`，全场连续区间、不重不漏。切完在心里过一遍：每场第 1 拍到最后一拍都有主吗？
-2. **秒数是下单不是估算。** 分镜秒数直接决定切点时刻和对齐指令——改秒数必须同步改 `h3Prompt`，validate 逐字对账，改一边必被拦。
-3. **台词装得下。** 认领节拍的台词秒数 ≤ 分镜秒数。4.4 秒的台词就给 5 秒的切。
-4. **景别短语进分镜图提示词，运镜词进这一切自己的镜头正文里。** 一切一个运镜，写成自然的动作句。**用哪种语言的运镜词，跟着这份分镜的 `promptLang` 走**：英文模式用官方英文词（Push In / Pan Left / Tracking Shot…，`a slow push in toward…`），中文模式用 `schema.md` 词表的中文词（推 / 摇 / 跟拍…，「镜头小幅缓推向掐白的指节」）。门按 `promptLang` 逐切对账，写错语言当场拦——别把一种协议的语言当成所有分镜的默认。
-5. **分镜图提示词直呼角色名；视频正文一律用通用身份。** 两半的规矩相反，因为定规矩的不是同一个人：
-   - **分镜图提示词（frame）写名字**（张三、王五）。它是唯一带着设定图一起生成的那张——场景图、角色设定图、道具图都挂在提示词上并按名字列出，名字因此是**指向某张参考图的地址**，不是省略了外貌描写。同框两个年轻男子时，通用身份说不清哪张脸配哪句动作。
-   - **视频正文（`h3Prompt` 的镜头行、Seedance 的 `shot`）不写名字**，用通用身份（an old ferryman、一名铁灰袍中年男子）。**这是 MiniMax H3 和 Seedance 官方提示词规范的硬性要求**，不是我们能放宽的。姓名只许出现在台词原文里。
-   角色设定图、场景图、道具图的提示词同样禁名字——那几张是**从文字长出来的**，没有参考图可指，名字在那里就是一个本该写外貌的空洞。
-6. **构图量化进字段，段有走位。** 每镜填 `lens` / `cameraPosition` / `composition` / `eyeline` / `focus` / `stability`；每段填 `blocking`（开场谁在左谁在右、朝向、间距）。写法见 `shot-writing.md`「构图要量化」。这是替代分镜图的那部分信息：不出分镜图时它们就是构图的全部来源，出分镜图时它们让图和正文说的是同一个镜头。
+1. **Claiming is the foundation.** Every shot declares `beats:[from,to]`, a contiguous interval across the whole scene, no overlap and no gap. After cutting, run through it mentally: is every scene's beat 1 through the last beat claimed?
+2. **Seconds are an order, not an estimate.** The cut seconds directly determine the cut times and the alignment instruction — changing seconds requires changing `h3Prompt` in step, validate audits verbatim, and changing one side is always blocked.
+3. **Dialogue must fit.** The dialogue seconds of the claimed beats ≤ the shot seconds. A 4.4s line gets a 5s cut.
+4. **The shot-size phrase goes into the frame prompt; the camera-move term goes into this cut's own shot body.** One camera move per cut, written as a natural action sentence. **Which language the camera-move term uses follows this storyboard's `promptLang`**: English mode uses the official English terms (Push In / Pan Left / Tracking Shot …, `a slow push in toward…`), Chinese mode uses the Chinese terms from `schema.md`'s vocabulary (推 / 摇 / 跟拍 …, "the camera slowly pushes in on the knuckles pressed white"). The gate audits per cut according to `promptLang`, and the wrong language is blocked on the spot — do not treat one protocol's language as the default for all storyboards.
+5. **The frame prompt names characters directly; the video body always uses generic identities.** The two halves have opposite rules, because the people who set them are not the same:
+   - **The frame prompt (`frame`) writes names** (张三, 王五). It is the only one generated together with the sheets — the scene sheet, character sheets and prop sheets are all attached to the prompt and listed by name, so a name there is **an address pointing at a particular reference sheet**, not an omitted description of appearance. With two young men in frame, a generic identity cannot say which face goes with which action.
+   - **The video body (the shot lines of `h3Prompt`, Seedance's `shot`) writes no names** and uses generic identities (an old ferryman, a middle-aged man in an iron-grey robe). **This is a hard requirement of the MiniMax H3 and Seedance official prompt guides**, not something we can relax. Names may appear only inside the dialogue text.
+   The prompts for character sheets, scene sheets and prop sheets likewise ban names — those are **grown from text**, have no reference sheet to point at, and a name there would be a hole where appearance should have been written.
+6. **Composition goes into quantified fields; segments have blocking.** Per shot fill `lens` / `cameraPosition` / `composition` / `eyeline` / `focus` / `stability`; per segment fill `blocking` (at the opening, who is left, who is right, facing, spacing). For how to write them see `shot-writing.md`, "Composition must be quantified". This is the information that substitutes for the frame: without frames they are the entire source of composition, and with frames they make the image and the body describe the same shot.
 
-## 导演运镜手感（不设门，但决定像不像专业分镜）
+## Directorial camera feel (not gated, but it decides whether it looks like a professional storyboard)
 
-- **3 秒一切是短剧的呼吸。** 竖屏观众的注意力就这个粒度——切快了信息断，切慢了人走。节奏带上应该深浅相间、长短相间。
-- **对话切正反打。** 问话给问话人的近景，答话切答话人的近景，来回跳；谁的台词信息量大，谁的脸给得近。同一段里解决，一次生成。
-- **进场三件套，第一切给运动主体。** 每集第一切必须有主体运动（跟拍雾中奔跑，或固定机位里的人在动）——静物特写开场是死画面，留给第二落点。新空间随后再定场：运动主体 → 大远景定场 → 关键局部特写。观众三秒内知道谁在动、在哪、看什么。
-- **关键动作独立成切。**「她一把按住箱盖」这种拍值得单独一格 2 秒的特写插入（insert）——它是节奏的重音。
-- **反应镜头是免费的戏。** 一句重台词之后，切听者的脸 2–3 秒，不用写词。VO 盖空镜或特写，天然省口型。
-- **动接动。** 上一切结尾的动势（手伸向箱子）接下一切开头的动势（手被按住），段内连贯性交给 H3，切点选在动作中间而不是动作完成后。
-- **段的最后一切留钩。** 每段结尾的分镜要么是悬念的具象（口袋、铜扣、灯），要么是下一段的引子——段与段之间也是剪辑点。
-- **运镜克制。** 固定镜头是默认；推给情绪、拉给收场、跟给移动。一段里超过两种运镜就该问自己是不是在炫技。
+- **A cut every 3 seconds is the breathing of short drama.** That is the granularity of a vertical-video audience's attention — cut faster and the information breaks, cut slower and they leave. The rhythm strip should alternate light and dark, long and short.
+- **Cut dialogue shot–reverse-shot.** Give the asker a close-up, cut to the answerer's close-up, jump back and forth; whoever's line carries more information gets the closer face. Resolve it inside one segment, one generation.
+- **The three-shot entrance: the first cut gives the moving subject.** Every episode's first cut must have subject motion (tracking a run through the fog, or a person moving inside a locked-off frame) — opening on a still-life close-up is a dead frame; save it for the second beat. Then establish the new space: moving subject → extreme wide establishing shot → key-detail close-up. The audience knows within three seconds who is moving, where, and what they are looking at.
+- **Key actions become their own cut.** A moment like "she slams a hand on the chest lid" deserves its own 2-second insert close-up — it is the rhythmic accent.
+- **Reaction shots are free drama.** After a heavy line, cut to the listener's face for 2–3s without writing a word. VO over an empty shot or a close-up naturally saves on lip sync.
+- **Cut on motion.** The momentum at the end of the previous cut (a hand reaching for the chest) takes up the momentum at the start of the next (the hand pinned down); the continuity within a segment is left to H3, so choose the cut point mid-action rather than after it completes.
+- **The last cut of a segment leaves a hook.** Each segment's final shot is either a concrete image of suspense (a pocket, a brass button, a lamp) or the lead-in to the next segment — the joins between segments are edit points too.
+- **Camera restraint.** A locked-off shot is the default; push in for emotion, pull out to close, track for movement. More than two camera moves in one segment should make you ask whether you are showing off.
 
-## 参考图纪律（分镜图质量的一半在这）
+## Reference-image discipline (half of frame quality lives here)
 
-分镜图生成 = 提示词 + 参考图。切镜时就想好每格要挂哪些参考：
+Frame generation = prompt + reference images. While cutting, decide which references each frame will carry:
 
-- 场景设定图（该段场景 + 光照状态）——必挂
-- 画内每个角色的设定图——有几个挂几个
-- 画内叙事道具的设定图——有就挂
+- The scene sheet (this segment's scene + lighting state) — always
+- A sheet for each character in frame — one per character present
+- A sheet for each narrative prop in frame — attach when available
 
-提示词与参考图冲突时，模型听参考图的——所以提示词专心写构图、**此刻的位置状态**（已上船 / 在舱内 / 在桥头）和姿态，长相材质交给参考图。画面里出现的大资产（船、车、宅门）也要挂它自己的设定图，不挂就每帧长得不一样。
+When the prompt and the reference image conflict, the model follows the reference — so the prompt concentrates on composition, **the current position state** (already aboard / inside the cabin / on the bridgehead) and pose, leaving looks and material to the reference. Large assets appearing in the picture (boats, carts, gatehouses) must carry their own sheets too, or each frame will look different.
 
-## 常见病
+## Common diseases
 
-| 病 | 症状 | 治法 |
+| Disease | Symptom | Cure |
 | --- | --- | --- |
-| 舞台剧病 | 一段一切杵到底 | 对话切正反打，动作给插入特写 |
-| 均匀病 | 每切都是 3 秒中景 | 深浅相间、长短相间才是节奏 |
-| 秒数漂移 | 改了分镜秒数忘改提示词 | validate 会拦：对齐指令和切点时刻逐字对账 |
-| 台词爆仓 | 4.4 秒的台词塞 3 秒的切 | 加秒或拆切 |
-| 声景漏改 | 画面改成搭手卸担，环境音还写着铜铃撞击 | **声景也是动作指令**——剧本动作一改，描述、声景、中文对照三处一起改（踩过：视频真把撞击演出来了） |
-| 特写失忆 | 大特写的道具和设定图长得不一样 | 挂道具设定图当参考，提示词提锚点特征 |
-| 换景不换段 | 一段里从栈桥切进船舱 | 换景必开新段——一段一个环境锚 |
-| 改切不读邻切 | 第 1 切改成岸路奔跑，第 2 切还写着栈桥才露出来，图却画在栈桥上 | 改一切连读前后切，分镜图和文字逐格对照——位置是连续状态 |
+| Stage-play disease | One cut held for the whole segment | Cut dialogue shot–reverse-shot; give actions insert close-ups |
+| Evenness disease | Every cut is a 3-second medium shot | Alternating light and dark, long and short is what makes rhythm |
+| Second drift | Changed the cut seconds and forgot the prompt | validate blocks it: the alignment instruction and cut times are audited verbatim |
+| Dialogue overflow | A 4.4s line crammed into a 3s cut | Add seconds or split the cut |
+| Soundscape left behind | The picture changed to handing off a load, but the ambient sound still says a bell clanging | **Soundscape is also an action instruction** — when the script action changes, the description, the soundscape and the Chinese comparison change together (hit in production: the video really did act out the impact) |
+| Close-up amnesia | The prop in an extreme close-up looks different from its sheet | Attach the prop sheet as a reference, and mention the anchor feature in the prompt |
+| Location change without a new segment | One segment cuts from the bridge into the cabin | A location change always starts a new segment — one environment anchor per segment |
+| Changed one cut without reading its neighbours | Cut 1 changed to running along the bank path, cut 2 still says the bridge only just came into view, but the image is drawn on the bridge | When changing one cut, read the ones before and after, and compare image and text frame by frame — position is a continuous state |

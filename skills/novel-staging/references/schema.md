@@ -1,6 +1,6 @@
-# staging.json 格式
+# staging.json format
 
-一份 staging.json 记一部剧（或其中几集）每一场**开场那一刻**谁在哪。中途换位置不记——那是分镜的事，分镜从这一刻往后接着写。
+One staging.json records, for a show (or some of its episodes), who is where at **the opening moment** of each scene. Changes of position midway are not recorded — that is the storyboard's business, and the storyboard continues from this moment onward.
 
 ```json
 {
@@ -11,71 +11,71 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `source` | string | 剧名，`seed` 从 script.json 搬过来 |
-| `lang` | `zh` / `en` | 工作语言：东西的名字、人名、走位句用哪种语言写。报告界面默认也跟它 |
-| `locations` | location[] | 每个地点（美术场景）一条：从它的场景图里认出来的东西 |
-| `scenes` | scene[] | 每一场（剧本的场次）一条：开场站位 |
+| `source` | string | Show title, carried over by `seed` from script.json |
+| `lang` | `zh` / `en` | Working language: which language item names, person names and blocking sentences are written in. The report UI also follows it by default |
+| `locations` | location[] | One per location (art scene): the items recognized from its scene image |
+| `scenes` | scene[] | One per scene (a script scene): the opening blocking |
 
-## 坐标系
+## Coordinate system
 
-所有方位都按**场景**说，不按画面说：
+All compass directions are given by the **scene**, not by the frame:
 
-- **主视角**（场景图的标准取景）的机位在**南侧**，向北看。所以图的左边是西、右边是东，越往上（越远）越靠北，越往下（越近）越靠南。
-- **平面**（`plan`）是把整个房间摆平以后从正上方看：北在上、西在左，0 到 1，从西北角量起——横向从西墙（0）到东墙（1），纵向从北墙（0）到南边机位那一侧（1）。
-- 人的位置写成「在哪件东西的哪一侧、沿着这一侧多远」，不写平面坐标。平面上的点由程序按这句话算出来，所以画出来的和写出来的永远是一回事。
+- The **main view** (the scene image's standard framing) has its camera on the **south side**, looking north. So the left of the image is west and the right is east; the higher up (farther away), the farther north, and the lower down (closer), the farther south.
+- The **plan** (`plan`) is the room laid flat and viewed from directly above: north at the top, west on the left, 0 to 1, measured from the northwest corner — horizontally from the west wall (0) to the east wall (1), vertically from the north wall (0) to the south camera side (1).
+- A person's position is written as "which side of which item, and how far along that side", not as plan coordinates. The point on the plan is computed by the program from that statement, so what is drawn and what is written are always one and the same thing.
 
 ## location
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `sceneId` | string | `S01` 格式，对账 art.json 的场景 |
-| `name` | string | 地点名，`seed` 从 art.json 搬过来；报告按它找图（`images/<名字>-sheet.png`） |
-| `readFrom` | `picture` / `prompt` / null | `picture`：看着场景图认的；`prompt`：还没有图，按 art.json 的锚点和主视角提示词推算的。null = 还没认 |
-| `items` | item[] | 4–20 件，按从北到南排 |
+| `sceneId` | string | `S01` format, reconciled against art.json's scenes |
+| `name` | string | Location name, carried over by `seed` from art.json; the report finds the image by it (`images/<name>-sheet.png`) |
+| `readFrom` | `picture` / `prompt` / null | `picture`: recognized by looking at the scene image; `prompt`: there is no image yet, reckoned from art.json's anchors and main-view prompt. null = not yet recognized |
+| `items` | item[] | 4–20, ordered from north to south |
 
 ### item
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `name` | string | 用工作语言写，十个字以内，写成走位里说得出口的叫法；同类的东西带上方位或特征区分（「北端主位太师椅」「东侧落地窗」）。不重复 |
-| `alt` | string | 同一件东西的另一种语言，英文走位句用它 |
-| `box` | [左, 上, 右, 下] | 它在图上的位置，0–1，以整张图的宽高为 1。`readFrom` 是 `picture` 时必填；`prompt` 时没有图，不写 |
-| `plan` | [西, 北, 东, 南] | 它在平面上占的地方，0–1。按透视推算，不是照抄 box |
-| `on` | boolean | 人能坐在、站在它上面（椅子、长凳、床、台子、台阶、船板） |
-| `round` | boolean，可选 | 从正上方看是圆的（圆桌、圆地毯）：画成圆，人围着它一圈；不写就看名字里有没有「圆」 |
+| `name` | string | Written in the working language, within ten characters, as a term that can be said aloud in blocking; things of the same kind are told apart by direction or feature ("north-end head-seat armchair", "east-side floor-to-ceiling window"). No duplicates |
+| `alt` | string | The same item in the other language; English blocking sentences use it |
+| `box` | [left, top, right, bottom] | Its position on the image, 0–1, with the whole image's width and height as 1. Required when `readFrom` is `picture`; with `prompt` there is no image, so do not write it |
+| `plan` | [west, north, east, south] | The place it occupies on the plan, 0–1. Reckoned from perspective, not copied from box |
+| `on` | boolean | A person can sit or stand on it (chair, long bench, bed, platform, steps, boat plank) |
+| `round` | boolean, optional | Round when viewed from directly above (round table, round rug): drawn as a circle, with people in a ring around it; if not written, it depends on whether the name contains "圆" (round) |
 
 ## scene
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `ep` | number | 集号 |
-| `scene` | number | 这一集的第几场，从 1 开始，对账 script.json 的 `episodes[].scenes[]` 顺序 |
-| `sceneId` | string | 在哪个地点，对账 `locations[].sceneId` |
-| `lighting` | string，可选 | 剧本写的时段光照，`seed` 搬过来，只给人看 |
-| `cast` | {id, name}[] | 这一场的出场人物，`seed` 从剧本搬过来，不改 |
-| `places` | place[] | 出场人物每人正好一条，顺序就是走位句的顺序 |
-| `extras` | number | 除了出场人物还有几个群演。剧本没写有别人就是 0 |
-| `extrasWhere` | string / null | 群演在哪（「长桌西侧南端」）；`extras` 是 0 时写 null |
-| `why` | string，可选 | 一句话：为什么这么排。报告里显示，给人改的时候参考 |
+| `ep` | number | Episode number |
+| `scene` | number | Which scene of this episode, from 1, reconciled against the order of `episodes[].scenes[]` in script.json |
+| `sceneId` | string | In which location, reconciled against `locations[].sceneId` |
+| `lighting` | string, optional | The time-of-day lighting the script writes, carried over by `seed`, for people to read only |
+| `cast` | {id, name}[] | The people who appear in this scene, carried over by `seed` from the script, not to be changed |
+| `places` | place[] | Exactly one entry per person who appears; the order is the order of the blocking sentence |
+| `extras` | number | How many extras there are besides those who appear. If the script does not say anyone else is there, it is 0 |
+| `extrasWhere` | string / null | Where the extras are ("south end, west side of the long table"); write null when `extras` is 0 |
+| `why` | string, optional | One sentence: why it was planned this way. Shown in the report, for reference when people change it |
 
 ### place
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `id` / `name` | string | 照抄 `cast` |
-| `present` | boolean | 开场时这个人在不在。后面才进来的写 false |
-| `item` | string / null | 照抄这个地点 `items` 里的一个名字；不在场写 null |
-| `side` | `north` / `east` / `south` / `west` / `on` / null | 在这件东西的哪一侧；在它上面写 `on`（只有 `on: true` 的东西可以） |
-| `along` | number / null | 沿这一侧的位置，0–1：东侧、西侧从北端（0）到南端（1）；北侧、南侧从西端（0）到东端（1）。`side` 是 `on` 时写 0.5 |
-| `posture` | `sit` / `stand` | 坐还是站；不在场可以写 null |
-| `facing` | 八个方位之一 | `north` / `northeast` / `east` / `southeast` / `south` / `southwest` / `west` / `northwest`；不在场可以写 null |
+| `id` / `name` | string | Copied from `cast` |
+| `present` | boolean | Whether this person is there at the opening. Write false for those who come in later |
+| `item` | string / null | Copy one of the names in this location's `items`; write null if not present |
+| `side` | `north` / `east` / `south` / `west` / `on` / null | Which side of this item; write `on` for on top of it (only items with `on: true` allow it) |
+| `along` | number / null | Position along this side, 0–1: on the east and west sides from the north end (0) to the south end (1); on the north and south sides from the west end (0) to the east end (1). Write 0.5 when `side` is `on` |
+| `posture` | `sit` / `stand` | Sitting or standing; may be null if not present |
+| `facing` | one of eight directions | `north` / `northeast` / `east` / `southeast` / `south` / `southwest` / `west` / `northwest`; may be null if not present |
 
-## 开场走位句
+## Opening blocking sentence
 
-`blocking` 命令和报告按上面的数据写出每一场的开场走位：在场的每个人一句，按 `places` 的顺序，最后一句交代还有没有别人。
+The `blocking` command and the report write each scene's opening blocking from the data above: one sentence for each person present, in the order of `places`, and the last sentence accounts for whether anyone else is there.
 
-> 沈知微站在岸端土坡上，面朝北；老周坐在靠岸的渡船上，面朝南；其余座位空着，没有其他人。
+> 沈知微 stands on the earth slope at the shore end, facing north; 老周 sits on the ferry moored at the shore, facing south; the other seats are empty, and there is no one else.
 
-同一件东西同一侧落在同一段的几个人，后面的人会带上「、XX 南侧」说清先后。分镜写这一场第一段的开场走位时，照抄这一句。
+For several people who land on the same side of the same item within the same stretch, the later person carries "、XX south side" to make the order clear. When the storyboard writes this scene's first-segment opening blocking, it copies this sentence.

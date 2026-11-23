@@ -1,45 +1,45 @@
-# script-report.html 设计约定
+# script-report.html design conventions
 
-与 novel-characters / novel-outline / novel-art 的报告同一套视觉语言。改样式前先读这份，别凭感觉发挥。
+The same visual language as the reports of novel-characters / novel-outline / novel-art. Read this before changing styles; do not improvise by feel.
 
-## 基调
+## Tone
 
-- 冷灰印张 + 铁锈红印记：`--paper:#eceded` `--panel:#f5f6f5` `--seal:#8a3324` `--seal-2:#c56a4e` `--ok:#3d6b4f`。这套配色跑过可视化验证器，别私自换色
-- 页宽 1600，衬线标题（宋体系）+ 无衬线正文，克制的分区排版，像一份业内评审文件
-- **零外部依赖**：全部样式内联、图形是纯 CSS/SVG，离线双击能开
-- 模型产出的每一个字都要过 `esc()`；内嵌 JSON 的 `<` 转成 `<` 防 `</script` 截断
+- Cool-grey stamp paper + rust-red seal marks: `--paper:#eceded` `--panel:#f5f6f5` `--seal:#8a3324` `--seal-2:#c56a4e` `--ok:#3d6b4f`. This palette has been run through the visualization validator; do not change colors on your own
+- Page width 1600, serif headings (Song-family) + sans-serif body, restrained sectioned layout, like an industry review document
+- **Zero external dependencies**: all styles inline, graphics pure CSS/SVG, opens offline with a double-click
+- Every character the model produces goes through `esc()`; `<` in embedded JSON is escaped as `<` so `</script` cannot truncate it
 
-## 区块顺序
+## Block order
 
-KPI 带 → 01 时长仪表 → 02 分集剧本 → 03 场次总表 → 04 台词本 → 05 质量门。时长是钱，仪表放最前；台词本是 TTS 的工作清单，放表格之后。
+KPI band → 01 duration gauge → 02 per-episode script → 03 scene master table → 04 dialogue book → 05 quality gates. Duration is money, so the gauge goes first; the dialogue book is TTS's work list and goes after the tables.
 
-## 时长仪表
+## Duration gauge
 
-- 每集一行：`E01 | 轨道 | 数值`，轨道里三层——目标区间带（`--band`，半透明绿）、台词段（`--seal`）、动作段（`--seal-2`）
-- 横轴比例尺全局统一（取全部集的最大值 × 1.08），行与行可以直接比长短
-- 达标的数值用 `--ok` 绿，超欠用 `--seal` 红加粗并写明差多少秒——病灶要点名，不许只变个颜色
+- One row per episode: `E01 | track | value`, three layers in the track — the target band (`--band`, semi-transparent green), the dialogue segment (`--seal`), and the action segment (`--seal-2`)
+- The horizontal scale is uniform globally (the maximum across all episodes × 1.08), so rows can be compared in length directly
+- Values on target use `--ok` green, over/under use `--seal` red in bold and state how many seconds off — the problem must be named, not just a change of color
 
-## 分集剧本
+## Per-episode script
 
-- **一排两集**：`.eps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}`，单集加 `.solo` 单列，窄屏降一列
-- 每集卡片里**场次区默认最多 300px**（`.scenes.clip{max-height:300px}` + 底部渐隐），集头/钩子/悬念永远可见；「展开全部场次 / 收起场次」是**开关**，收起时滚回卡片位置。页面加载后不超高的集自动放开并移除按钮（`scrollHeight` 判断）
-- 台词行是三列网格 `150px minmax(0,1fr) auto`：说话人（名字 + delivery 竖排）、台词、悬停出现的复制按钮。**滚动/网格容器一律 `minmax(0,1fr)`**，防中文长词把列挤成一字一行
-- 场头 chips：场景 id+名、光照（seal-2 描边）、人物、道具（seal 描边）。给了 `--outline` / `--art` 才显示名字，否则裸 ID——不猜
+- **Two episodes per row**: `.eps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}`, a single episode adds `.solo` for one column, dropping to one column on narrow screens
+- In each episode card the **scene area is at most 300px by default** (`.scenes.clip{max-height:300px}` + a fade at the bottom), while the episode header / hook / suspense are always visible; "Expand all scenes / Collapse scenes" is a **toggle**, and collapsing scrolls back to the card's position. After the page loads, episodes that are not too tall are opened automatically and the button removed (judged by `scrollHeight`)
+- A dialogue line is a three-column grid `150px minmax(0,1fr) auto`: speaker (name + delivery stacked), line, and a copy button that appears on hover. **Scroll/grid containers always use `minmax(0,1fr)`** so that long Chinese words do not squeeze the column into one character per line
+- Scene header chips: scene id+name, lighting (seal-2 outline), characters, props (seal outline). Names are shown only when `--outline` / `--art` is given, otherwise bare IDs — never guess
 
-## 台词本
+## Dialogue book
 
-- **一排两个**（`.casts` 网格，同 `.eps` 规则），按角色一组一卡，组头带句数/字数/约合秒数 + 「复制全部台词」（整组台词换行拼接，直接喂 TTS）
-- 列表**最多 6 行高**（`max-height:186px`）纵向滚动，细滚动条；打印时放开滚动全展开
-- VO 单独成组，显示为「画外音」
+- **Two per row** (the `.casts` grid, same rule as `.eps`), one card per character, the group header carrying line count / character count / approximate seconds + "Copy all dialogue" (the whole group's lines joined by newlines, to feed straight to TTS)
+- The list is **at most 6 rows high** (`max-height:186px`) scrolling vertically, with a thin scrollbar; when printing, scrolling is released and everything expanded
+- VO forms its own group, shown as "Voice-over"
 
-## 质量门
+## Quality gates
 
-- 页眉徽章 `✓ 质量门 n / n`；有未过项时 KPI 带下方挂病灶横幅（`.galert`），逐条列出未过的门和细节
-- 对账门在缺上游文件时显示「跳过（视为通过）」的小字——**跳过要明说，静默通过和撒谎只差一步**
+- Header badge `✓ Quality gates n / n`; when any fail, a problem banner (`.galert`) hangs under the KPI band listing each failing gate and its details
+- When upstream files are missing, reconciliation gates show small text "skipped (counted as passing)" — **a skip must be stated plainly; silent passing and lying are one step apart**
 
-## 交互与打印
+## Interaction and printing
 
-- 复制按钮统一 `.copy[data-copy]` 事件委托，成功换字 1.6 秒后还原；失败也要有反馈
-- `@media print`：折叠全展开、按钮全隐藏、白底
-- `prefers-reduced-motion` 关掉全部动效
-- 导出 JSON：数据内嵌在 `<script type="application/json">`，导出包 Blob 下载，`revokeObjectURL` 延迟 10 秒（Safari 会抢在下载前撤 blob）
+- Copy buttons uniformly use `.copy[data-copy]` event delegation, the text changing on success and reverting after 1.6 seconds; failure also needs feedback
+- `@media print`: collapsed sections fully expanded, buttons all hidden, white background
+- `prefers-reduced-motion` turns off all animation
+- JSON export: the data is embedded in `<script type="application/json">`, the export wraps it in a Blob for download, and `revokeObjectURL` is delayed 10 seconds (Safari revokes the blob before the download starts)

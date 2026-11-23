@@ -2,16 +2,16 @@
 name: novel-storyboard
 version: 2.0.0
 description: |
-  给 AI 短剧出分镜：三层结构——段（一次视频生成，≤15 秒）→ 分镜（段内 2–5 秒的剪切，认领剧本节拍）
-  → 分镜图（每切一张关键帧：主分镜图钉 0.00 秒，子分镜图钉各自切点）。
-  每段自带一条 MiniMax H3 视频提示词（官方口径默认英文、逐镜换行，promptLang 可切中文）：对齐指令和
-  [Shot k] 切点时刻由分镜结构推导、逐字对账，台词逐字进 <d> 块（写法规范已内化为
-  references/h3-prompt.md，不依赖外部 skill）。
-  产出 storyboard.json + Markdown + 单页评审报告（分镜节奏带 / 分集分镜表 / 生成批次单 /
-  配音对齐单，含导出 JSON）。不出图——交付的是每格的画面提示词和它该挂哪些参考图。
-  18 道质量门全部由脚本确定性检查（第 18 道 shot-recipe 可选：挂上 shot-recipes 卡库才查，不挂就明说跳过）；
-  export 一键导出 H3 投产包（每段提示词 + 按 Picture 序的分镜图清单）。零依赖、零 API key，用当前会话额度。
-  Use when asked to 分镜、出分镜、镜头表、切镜、storyboard for AI short drama。
+  Storyboarding for AI short drama: a three-level structure — segment (one video generation, ≤15s) → cut (a 2–5s edit inside the segment, claiming script beats)
+  → frame (one keyframe per cut: the master frame pinned at 0.00s, sub-frames pinned at their own cut marks).
+  Each segment carries one MiniMax H3 video prompt (official spec defaults to English, one shot per line; promptLang can switch to Chinese): the alignment instruction and
+  [Shot k] cut times are derived from the cut structure and audited verbatim, dialogue goes verbatim into <d> blocks (the writing spec is internalized in
+  references/h3-prompt.md, no external skill needed).
+  Outputs storyboard.json + Markdown + a single-page review report (cut rhythm strip / per-episode storyboard table / generation batch list /
+  audio alignment list, with Export JSON). No image generation — the deliverable is the picture prompt for each frame and which reference images it should carry.
+  All 18 quality gates are checked deterministically by script (the 18th, shot-recipe, is optional: checked only when a shot-recipes card library is mounted, otherwise the skip is stated);
+  export produces an H3 production pack in one command (every segment's prompt + the frame list in Picture order). Zero dependencies, zero API key, uses the current session's quota.
+  Use when asked to storyboard, produce a shot list, cut shots, or build a storyboard for AI short drama.
 allowed-tools:
   - Read
   - Write
@@ -31,7 +31,7 @@ metadata:
   license: Apache-2.0
   requires:
     bins:
-      - node          # >= 18，只用标准库，无 npm 依赖
+      - node          # >= 18, standard library only, no npm dependencies
   runtimes:
     - claude-code
     - codex
@@ -39,66 +39,66 @@ metadata:
 
 ## novel-storyboard
 
-给 AI 短剧出**分镜**——管线里第一个直接面对视频模型的层。**前提刻在骨子里：镜头是生成出来的，多切一镜的成本几乎为零**，所以这里不心疼镜头数量，上限只有一个：视频模型单段生成的时长（默认 15 秒）。
+Storyboards for AI short drama — the first layer in the pipeline that faces the video model directly. **The premise is burned in: shots are generated, so one more cut costs almost nothing** — so this layer is not precious about the number of shots; the only cap is the video model's single-generation duration (15s by default).
 
-**核心机制：镜头认领节拍。** 每个镜头声明它覆盖剧本某场的哪几个连续节拍（`sceneIndex` + `beats: [起, 止]`），镜头不许跨场次——换景必换镜。这让分镜和剧本的关系变成可机械对账的：
+**Core mechanism: shots claim beats.** Every shot declares which consecutive beats of which scene in the script it covers (`sceneIndex` + `beats: [from, to]`), and a shot may not cross scenes — changing location always means a new shot. That makes the relationship between storyboard and script mechanically auditable:
 
-| 交付 | 解决什么 |
+| Deliverable | What it solves |
 | --- | --- |
-| 节拍认领 | 每个节拍被恰好一个镜头认领、顺序不乱——剧本改了重跑 validate，失效的镜头当场点名 |
-| 单镜头 ≤ 15 秒 | AI 视频单段生成上限，长对话在这里被强制拆镜（`params.maxShotSeconds` 按模型改） |
-| 台词装得下 | 认领节拍的台词秒数 ≤ 镜头秒数——逐镜检查，不是拍脑袋 |
-| 分镜图提示词 + 镜头正文 | 分镜图提示词（`frame`，中文，直呼角色名）给图像模型配合设定图出图；镜头正文（`shot`，中文，通用身份）写这几秒发生什么。景别是枚举，中文景别词必须写进分镜图提示词 |
-| **H3 视频提示词（每段一条）** | MiniMax H3 的 I2VA 结构：固定对齐指令 + integrated_multimodal_description + overall_soundscape + non_diegetic_music。**认领节拍的台词逐字进 `<d>[Chinese] …</d>` 块**——对白、声景、配乐一段提示词全带上 |
-| **Seedance 视频提示词（每段一条，程序拼）** | 跟 H3 并列。由脚本按官方结构拼：参考图声明、段级走位、逐镜量化字段、台词 `{}`、音效 `<>`、配乐 `（）`、编号约束。模型只写每切的 `shot`，不写秒数、编号和图片引用 |
-| 构图量化字段 | 每段 `blocking`（谁在左谁在右、间距），每镜焦距／机位／构图／视线落点／焦点／稳定性——不出分镜图时，它们就是构图的全部来源 |
-| 生成批次单 | 同场景 + 同光照的镜头归一批，共用同一张环境参考图——AI 版的顺场表，脚本自动汇总 |
-| 配音对齐单 | 每句台词对到镜号——TTS 音频贴到哪一段视频，脚本自动汇总 |
+| Beat claiming | Every beat is claimed by exactly one shot, in order — re-run validate after a script change and the invalidated shots are named on the spot |
+| Single shot ≤ 15s | The AI video single-generation cap; long dialogue is forcibly split into shots here (`params.maxShotSeconds` per model) |
+| Dialogue fits | The dialogue seconds of the claimed beats ≤ the shot seconds — checked shot by shot, not guessed |
+| Frame prompt + shot body | The frame prompt (`frame`, Chinese, names characters directly) drives the image model together with the sheets; the shot body (`shot`, Chinese, generic identity) writes what happens in these seconds. Shot size is an enum, and the Chinese shot-size word must appear in the frame prompt |
+| **H3 video prompt (one per segment)** | MiniMax H3's I2VA structure: fixed alignment instruction + integrated_multimodal_description + overall_soundscape + non_diegetic_music. **Dialogue of the claimed beats goes verbatim into `<d>[Chinese] …</d>` blocks** — dialogue, soundscape and music all carried in one prompt |
+| **Seedance video prompt (one per segment, assembled by program)** | Parallel to H3. Assembled by script per the official structure: reference-image declarations, segment-level blocking, per-shot quantified fields, dialogue `{}`, sound effects `<>`, music `（）`, numbering constraints. The model writes only each cut's `shot`, not seconds, numbers or image references |
+| Composition quantified fields | Per segment `blocking` (who is left, who is right, spacing), per shot focal length / camera position / composition / eyeline / focus / stability — with no frames, these are the entire source of composition |
+| Generation batch list | Shots in the same scene + same lighting form one batch sharing one environment reference image — the AI equivalent of a shooting-order sheet, auto-summarised by script |
+| Audio alignment list | Every dialogue line mapped to a shot number — which video segment a TTS clip attaches to, auto-summarised by script |
 
-`{baseDir}` = 本文件所在目录。脚本 `{baseDir}/scripts/novel-storyboard.mjs`，零依赖，`node` 直接跑。
+`{baseDir}` = the directory this file lives in. The script is `{baseDir}/scripts/novel-storyboard.mjs`, zero dependencies, run it directly with `node`.
 
-**边界（不做的事）**：不写戏不改台词（`novel-script` 的活）、不出场景/角色/道具设定图（`novel-art` / `novel-characters` 的活）、不做视频生成与剪辑合成。口型/唇形同步暂不管——那是生成管线的事。
+**Boundaries (what it does not do)**: does not write or rewrite dialogue (that is `novel-script`'s job), does not generate scene / character / prop sheets (that is `novel-art` / `novel-characters`' job), does not do video generation or editing. Lip / mouth sync is out of scope for now — that belongs to the generation pipeline.
 
 ---
 
-### Step 0 — 定输入与范围
+### Step 0 — Set inputs and scope
 
-**script.json 是硬前提**——分镜离开剧本没有意义，validate/render 都必须给 `--script`。其余上游按有则用：
+**script.json is a hard prerequisite** — a storyboard without a script is meaningless, and validate/render must both be given `--script`. Use the other upstream inputs when available:
 
-- `--outline` / `--cast`：提示词禁人名检查 + 报告里 C01 显示成人名
-- `--art`：报告里 S01 显示成场景名 + 批次单嵌场景设定图
-- `--shots <卡片目录>`：**可选**挂载 shot-recipes 的镜头配方卡库（指向 `shot-recipes/references/cards`，只接受目录不接受导出的 JSON），开第 18 道 `shot-recipe` 门。没装 shot-recipes 就别给——本 skill 自包含，不依赖它
+- `--outline` / `--cast`: the prompt no-names check + C01 shown as a name in the report
+- `--art`: S01 shown as a scene name in the report + scene sheets embedded in the batch list
+- `--shots <cards dir>`: **optional** mounting of the shot-recipes shot recipe card library (point at `shot-recipes/references/cards`, accepts a directory only, not an exported JSON), enabling the 18th `shot-recipe` gate. Do not pass it without shot-recipes installed — this skill is self-contained and does not depend on it
 
-**一次切几集**：跟剧本的批次走（剧本写到哪就分到哪），默认一批 ≤ 3 集。
+**How many episodes at a time**: follow the script's batches (cut as far as the script is written), by default ≤ 3 episodes per batch.
 
-**先定画幅**：storyboard.json 顶层 `aspectRatio` 是分镜与下游出图共同遵守的正式合同，只接受 `16:9` 或 `9:16`。没有特别要求时使用 `16:9`；竖屏短剧明确写 `9:16`。
+**Set the aspect ratio first**: the top-level `aspectRatio` in storyboard.json is the formal contract shared by the storyboard and downstream image generation, and accepts only `16:9` or `9:16`. Use `16:9` when there is no special requirement; vertical short drama states `9:16` explicitly.
 
-### Step 1 — seed 工作底稿
+### Step 1 — Seed the worksheet
 
 ```bash
 node {baseDir}/scripts/novel-storyboard.mjs seed <script.json> --eps 1-3 --aspect 16:9 > <workdir>/storyboard.json
 ```
 
-确定性展开：每场的节拍清单（编号、动作/台词、每拍秒数、说话人）进 `seedScenes`，这就是切镜时的工作底稿；同时把 `--aspect` 写进顶层 `aspectRatio`，省略时默认 `16:9`。**每拍几秒是算出来的，不要让模型重新估。** shots 留空，切镜才是模型的活。
+Deterministic expansion: each scene's beat list (number, action/dialogue, seconds per beat, speaker) goes into `seedScenes`, which is the worksheet for cutting; `--aspect` is also written into the top-level `aspectRatio`, defaulting to `16:9` when omitted. **How many seconds each beat is, is computed — do not let the model re-estimate.** shots stay empty; cutting shots is the model's job.
 
-### Step 2 — 逐集分段切镜
+### Step 2 — Segment and cut, episode by episode
 
-每集一份任务，能并发就并发。每份任务拿到：
+One task per episode, concurrent if possible. Each task receives:
 
-- `{baseDir}/references/storyboard-pass.md` 和 `{baseDir}/references/schema.md`（读它们，照着做）
-- 该集的 seedScenes 底稿 + 场景卡（art.json 的锚点与光照提示词）+ 角色卡（cast.json 的形象要点）
+- `{baseDir}/references/storyboard-pass.md` and `{baseDir}/references/schema.md` (read them and follow them)
+- That episode's seedScenes worksheet + scene cards (art.json's anchors and lighting prompts) + character cards (cast.json's look points)
 
-流程：**先按剧情单元分段**（每段 9–15 秒、不跨场），**段内切 2–5 秒的分镜**（对话正反打、关键动作插入特写、进场三件套——切镜语法都在 storyboard-pass.md），每切写一条分镜图提示词（中文，直呼角色名）、一段镜头正文 `shot`（中文，通用身份）和六个构图字段；每段写 `blocking`、`soundscape`，有配乐再写 `music`。全部分镜图与下游生成图必须保持顶层 `aspectRatio` 指定的同一画幅。
+Process: **first segment by story unit** (9–15s each, never crossing scenes), **then cut 2–5s cuts inside the segment** (dialogue shot–reverse-shot, key-action insert close-ups, the three-shot entrance — the cutting grammar is all in storyboard-pass.md), and for each cut write one frame prompt (Chinese, naming characters directly), one shot body `shot` (Chinese, generic identity) and the six composition fields; for each segment write `blocking`, `soundscape`, and `music` if there is score. All frames and downstream generated images must keep the same aspect ratio specified by the top-level `aspectRatio`.
 
-**每段的镜头正文照 `{baseDir}/references/shot-writing.md` 写**（协议无关：一切一个运镜、动作要做得完、台词逐字、声音分层、不写画风）。发给哪个视频服务，就再套哪份协议语法：MiniMax H3 见 `{baseDir}/references/h3-prompt.md`，Seedance 见 `{baseDir}/references/seedance-prompt.md`。
+**Write each segment's shot body per `{baseDir}/references/shot-writing.md`** (protocol-agnostic: one camera move per cut, actions must be completable, dialogue verbatim, layered sound, no visual style). Whichever video service you send it to, layer that protocol's syntax on top: MiniMax H3 see `{baseDir}/references/h3-prompt.md`, Seedance see `{baseDir}/references/seedance-prompt.md`.
 
-**每段写一条 `h3Prompt`**，照 `{baseDir}/references/h3-prompt.md` 写（官方方法论的内化版，**不依赖任何外部 skill**）。官方口径默认英文（`promptLang` 可切中文），**每个镜头独立一行**。要点：首行对齐指令和 `[Shot k]` 切点时刻**由分镜秒数推导，一个字符都不许漂**（validate 逐字对账）；认领台词**逐字**进 `<d>[Chinese] …</d>`；每切的运镜词写进自己那一行；声景与配乐分进后两个字段——**声景也是动作指令，画面改了声景一起改**。
+**Write one `h3Prompt` per segment**, per `{baseDir}/references/h3-prompt.md` (an internalized version of the official methodology, **depending on no external skill**). The official spec defaults to English (`promptLang` can switch to Chinese), **one line per shot**. Key points: the first-line alignment instruction and the `[Shot k]` cut times **are derived from the cut seconds, and not one character may drift** (validate audits verbatim); claimed dialogue goes **verbatim** into `<d>[Chinese] …</d>`; each cut's camera-move term goes into its own line; soundscape and music go into the last two fields — **soundscape is also an action instruction; when the picture changes the soundscape changes with it**.
 
-**Seedance 提示词不用写**：`render` 报告的提示词面板和 `export --protocol seedance` 都会从上面这些字段现拼。视觉风格由调用方提交时附加，全局约束用 `--constraints <文件>` 给。
+**Do not write the Seedance prompt**: the prompt panel in the `render` report and `export --protocol seedance` both assemble it from the fields above. Visual style is appended by the caller at submission time; global constraints are given with `--constraints <file>`.
 
-切完把 `seedScenes` 删掉。
+Once done cutting, delete `seedScenes`.
 
-### Step 3 — 校验 ⛔ 不能跳
+### Step 3 — Validate ⛔ Do not skip
 
 ```bash
 node {baseDir}/scripts/novel-storyboard.mjs validate <storyboard.json> \
@@ -106,85 +106,85 @@ node {baseDir}/scripts/novel-storyboard.mjs validate <storyboard.json> \
   [--shots </path/to/cards>]
 ```
 
-18 道质量门全是代码：节拍全覆盖（分镜级，恰好一次、按顺序、连续）、段 0 < 总秒 ≤ 15、**每切 2–5 秒**、台词装得进分镜、每集总时长在剧本目标 ±15% 内、同框 ≤ 3 人（超了必须带拆解说明）、段号 E01-01 格式连号、中文景别词在分镜图提示词里、运镜用 H3 词表且在自己的 [Shot k] 段落里、**H3 对齐指令由分镜结构推导逐字对账 + 切点时刻逐个对**、**认领台词逐字进 `<d>` 块**、**提示词语言与 promptLang 一致**（双向查：中文写成英文、英文混进中文都拦）、分镜图提示词中文非空、**视频提示词不含角色名**（H3 正文不分语言、Seedance 镜头正文都查；分镜图提示词直呼其名放行）、**构图量化字段齐全**、**Seedance 镜头正文合规**（中文非空，不写时间、镜头编号、图片引用和协议符号）、场次/人物/道具对账剧本、**镜头配方对账**（可选门，见下）。
+The 18 quality gates are all code: full beat coverage (at cut level, exactly once, in order, contiguous), segment 0 < total seconds ≤ 15, **every cut 2–5s**, dialogue fits within the shot, each episode's total duration within ±15% of the script target, ≤ 3 people in frame (more requires a breakdown note), segment numbers in E01-01 format and sequential, the Chinese shot-size word in the frame prompt, camera moves drawn from the H3 vocabulary and inside their own [Shot k] passage, **the H3 alignment instruction derived from the cut structure and audited verbatim + every cut time checked one by one**, **claimed dialogue verbatim inside `<d>` blocks**, **prompt language matching promptLang** (checked both ways: Chinese written as English, and English mixed into Chinese, both blocked), frame prompts Chinese and non-empty, **video prompts containing no character names** (H3 body regardless of language, and the Seedance shot body; frame prompts naming characters are allowed), **composition quantified fields complete**, **Seedance shot body compliant** (Chinese and non-empty, with no timings, shot numbers, image references or protocol symbols), scenes / characters / props audited against the script, **shot recipe audit** (optional gate, see below).
 
-结构检查还会校验可选的 `aspectRatio`：只接受 `16:9` 或 `9:16`。它属于 storyboard.json 合同检查，不另算质量门。
+The structure check also validates the optional `aspectRatio`: accepts only `16:9` or `9:16`. It belongs to the storyboard.json contract check and does not count as a separate quality gate.
 
-**有违规逐条修，改完重跑，直到通过。**
+**Fix each violation as reported, re-run after fixing, until it passes.**
 
-**第 18 道 `shot-recipe`（可选挂载）**：给了 `--shots` 才查，不给就明说跳过。cut 上可以写一个可选的 `recipe`（配方卡 id，**cut 级不是 segment 级**，**多格配方靠连续同 id 的分镜表达**，不是数组），门查三条——id 在卡库里、卡片的每条 `must_phrases` 出现在该切的 `frame` 里（两边小写化后 `includes`）、卡片 `cuts` 下限 ≥ 2 时连续同 id 的分镜数不得低于该下限。卡片的**建议景别与运镜不设门**，只在报告的「配方」列和 `checkup` 末尾提示偏离：配方是语汇不是法条，可选挂载的东西一旦变严就没人挂。
+**The 18th gate `shot-recipe` (optional mount)**: checked only when `--shots` is given; when not given, say plainly that it is skipped. A cut may carry an optional `recipe` (a recipe card id, **at cut level not segment level**, **a multi-cut recipe expressed as consecutive cuts sharing the id**, not an array); the gate checks three things — the id exists in the card library, every one of the card's `must_phrases` appears in that cut's `frame` (lowercased on both sides, `includes`), and when the card's `cuts` lower bound ≥ 2 the number of consecutive cuts sharing the id must not fall below that bound. The card's **suggested shot size and camera move are not gated**, only flagged as a deviation in the report's "Recipe" column and at the end of `checkup`: a recipe is vocabulary, not law, and an optional mount that turns strict is one nobody mounts.
 
-### Step 4 — 输出与汇报
+### Step 4 — Output and report back
 
 ```bash
-cd <输出目录>
-node {baseDir}/scripts/novel-storyboard.mjs render <剧名>-storyboard.json --md \
-  --script <script.json> --outline <outline.json> --art <art.json> > <剧名>-storyboard.md
-node {baseDir}/scripts/novel-storyboard.mjs render <剧名>-storyboard.json --html \
+cd <output dir>
+node {baseDir}/scripts/novel-storyboard.mjs render <title>-storyboard.json --md \
+  --script <script.json> --outline <outline.json> --art <art.json> > <title>-storyboard.md
+node {baseDir}/scripts/novel-storyboard.mjs render <title>-storyboard.json --html \
   --script <script.json> --outline <outline.json> --art <art.json> > storyboard-report.html
 ```
 
-报告界面语言用 `--lang zh|en` 指定（优先级 `--lang` > JSON 顶层 `lang` 字段 > 默认中文）——只切界面标签，与 `promptLang`（H3 提示词语言）互相独立。主分镜图与子分镜条按顶层 `aspectRatio` 排版；旧数据的 `_meta.orientation` 与 frame 末尾画幅标签只作兼容。`render` 用 `--frames <目录>` 找分镜图（`<目录>/<段号>/f<切序>.png`，默认当前目录）、用 `--images <目录>` 找批次单的场景设定图（`<目录>/<场景 slug>-sheet.png`，默认 `./images`），两个都可以指到任意路径——**本 skill 不产生这些文件**，下游出完图重跑一次 render 就能嵌进报告。`export --frames <目录>` 会把找得到的分镜图拷进投产包，不用手动往包里放。报告含：KPI 带、分镜节奏带（粗分隔 = 段边界、片宽 = 分镜时长占比、颜色深浅 = 景别远近、点击跳段卡）、分集分镜表（主分镜图 + 子分镜条 + 逐切分镜行 + 分镜图/H3 提示词复制按钮）、生成批次单、配音对齐单、质量门、导出 JSON。Markdown 版每段附完整 H3 提示词，直接复制可用。
+The report UI language is set with `--lang zh|en` (priority `--lang` > the JSON top-level `lang` field > Chinese default) — it switches UI labels only, and is independent of `promptLang` (the H3 prompt language). The master frame and sub-frame strip are laid out per the top-level `aspectRatio`; older data's `_meta.orientation` and the aspect tag at the end of a frame are kept for compatibility only. `render` finds frames with `--frames <dir>` (`<dir>/<segment id>/f<cut index>.png`, current directory by default) and the batch list's scene sheets with `--images <dir>` (`<dir>/<scene slug>-sheet.png`, `./images` by default); both can point at any path — **this skill does not produce these files**; once downstream has generated the images, re-run render and they will be embedded in the report. `export --frames <dir>` copies every frame it can find into the production pack, so you need not place them by hand. The report contains: KPI band, cut rhythm strip (thick separators = segment boundaries, slice width = cut duration share, colour depth = shot size distance, click to jump to the segment card), per-episode storyboard table (master frame + sub-frame strip + per-cut storyboard rows + frame / H3 prompt copy buttons), generation batch list, audio alignment list, quality gates, export JSON. The Markdown version attaches the full H3 prompt to each segment, ready to copy and use.
 
-汇报一句话说清：几集几镜、总时长 vs 目标、几个生成批次、报告路径；没过的门明说。
+Report back in one sentence: how many episodes and shots, total duration vs target, how many generation batches, the report path; and state plainly any gate that did not pass.
 
-**不要说「已出图」**——这一步不存在了，交付的是提示词和挂图清单。
+**Do not say "images generated"** — that step does not exist here; the deliverable is prompts and the list of images to attach.
 
-最终落地：
+Final layout:
 
 ```
-<输出目录>/
-├── <剧名>-storyboard.json
-├── <剧名>-storyboard.md
-├── storyboard-report.html         ← 双击就能开
-├── manifest.json                  ← export 生成
-└── E01-01/                        ← 一段一个文件夹 = 一次 H3 生成的全部材料
-    ├── f1.png                     ← 主分镜图（下游出完放这儿）
-    ├── f2.png …                   ← 子分镜图
-    └── prompt.md                  ← H3 提示词（export 生成）
+<output dir>/
+├── <title>-storyboard.json
+├── <title>-storyboard.md
+├── storyboard-report.html         ← double-click to open
+├── manifest.json                  ← produced by export
+└── E01-01/                        ← one folder per segment = all materials for one H3 generation
+    ├── f1.png                     ← master frame (downstream puts it here once generated)
+    ├── f2.png …                   ← sub-frames
+    └── prompt.md                  ← H3 prompt (produced by export)
 ```
 
 ---
 
-## 五个 skill 的接力（管线到此闭环）
+## The relay across the five skills (the pipeline closes here)
 
 ```
-novel-outline    → outline.json    （什么：结构与分集）
-novel-characters → cast.json       （谁：角色设定图）
-novel-art        → art.json        （哪里：场景/道具设定图）
-novel-script     → script.json     （戏：场次、节拍、台词）
-novel-storyboard → storyboard.json （怎么拍：镜头、首帧、批次）
+novel-outline    → outline.json    (what: structure and episodes)
+novel-characters → cast.json       (who: character sheets)
+novel-art        → art.json        (where: scene / prop sheets)
+novel-script     → script.json     (the drama: scenes, beats, dialogue)
+novel-storyboard → storyboard.json (how to shoot: shots, first frames, batches)
 ```
 
-分镜是消费端：seed 吃 script.json，分镜图出图（在下游）吃 art 和 characters 的设定图当参考，H3 提示词直接下单给视频模型，配音对齐单接 script 台词本的 TTS 产物。五份 JSON 各自的报告都带导出按钮，改完都能喂回各自的 render/validate。
+The storyboard is the consumer end: seed eats script.json, frame generation (downstream) uses art's and characters' sheets as references, the H3 prompt goes straight to the video model as an order, and the audio alignment list connects to the TTS output of script's line book. Each of the five JSON files' reports carries an export button, and the output can be fed back into its own render/validate.
 
-## 边界
+## Boundaries
 
-- 报告界面内置中英（`--lang`，默认中文）；提示词语言由 `promptLang` 单独控制（默认英文）
-- 秒数是**下给视频模型的生成时长**不是估算——段上限按你的模型改 `params.maxSegmentSeconds`，切的节奏区间改 `min/maxCutSeconds`
-- 口型/唇形同步暂不管——那是生成管线的事
-- 分镜图不追求一次到位——它是给视频模型的构图锚，构图对、资产对就够，微调交给重生成
+- The report UI ships built in Chinese and English (`--lang`, Chinese default); the prompt language is controlled separately by `promptLang` (English default)
+- Seconds are a **generation duration ordered from the video model**, not an estimate — change the segment cap with `params.maxSegmentSeconds` per your model, and the cut rhythm range with `min/maxCutSeconds`
+- Lip / mouth sync is out of scope for now — that belongs to the generation pipeline
+- Frames are not expected to be right first time — they are the composition anchor for the video model; right composition and right assets are enough, and fine-tuning is left to regeneration
 
-## 门失败会累积
+## Gate failures accumulate
 
-`validate` 与 `checkup` 每次都把门的结果追加到**当前目录**的 `.gates.jsonl`；跑 `stats` 汇总：
+Every `validate` and `checkup` appends the gate results to `.gates.jsonl` in the **current directory**; run `stats` to summarise:
 
 ```bash
 node {baseDir}/scripts/novel-storyboard.mjs stats
 ```
 
-回答三件事：**哪道门最常响**（那条规则模型最常无视，该改的是措辞）、**哪道门从没响过**（可能是死门，也可能规则已被内化）、**失败详情长什么样**（反复出现却没有门的那类问题，只能靠人看）。
+It answers three things: **which gate fires most often** (that rule is the one the model most often ignores — the wording is what should change), **which gate has never fired** (possibly a dead gate, or possibly a rule already internalized), **what the failure details look like** (the class of problem that recurs without a gate can only be found by a human reading them).
 
-不想记加 `--no-log`；写不进去静默跳过，不影响校验。
+Pass `--no-log` to skip logging; if it cannot be written the step is skipped silently and validation is unaffected.
 
-## 自测
+## Self-test
 
 ```bash
 node {baseDir}/scripts/selftest.mjs
 ```
 
-336 项断言，不调模型、不花额度。18 道质量门每一道都有击穿用例。改完脚本先跑这个。
+336 assertions, no model calls, no quota spent. All 18 quality gates have a defeating case. Run this first after changing the script.
 
-## 自带样例
+## Bundled sample
 
-`{baseDir}/examples/渡口-storyboard.json`：《渡口》第 1 集完整分镜——10 段 34 切认领剧本全部 35 拍，平均 3.5 秒一切，共 119 秒 / 目标 120 秒，2 个生成批次，每段带完整的 H3 视频提示词（多图对齐 + 切点时刻全部对账通过）。当质量基准，也是自测夹具。
+`{baseDir}/examples/渡口-storyboard.json`: the complete storyboard for episode 1 of 《渡口》 — 10 segments and 34 cuts claiming all 35 script beats, 3.5s per cut on average, 119s total / 120s target, 2 generation batches, each segment carrying a complete H3 video prompt (multi-image alignment + all cut times audited and passing). It serves as a quality baseline and as a self-test fixture.

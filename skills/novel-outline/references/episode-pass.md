@@ -1,23 +1,23 @@
-# 分集梗概 · 分批写
+# Episode synopses · written in batches
 
-骨架拍板之后才有这一步。给你：拍板后的骨架四块 + 你负责的集数区间（比如第 11–20 集）+ 这个区间内落着的爽点。产出这些集的 `episodes` 条目。**只输出 JSON 数组，不要解释、不要围栏。**
+This step comes only after the skeleton is signed off. You are given: the four skeleton blocks as signed off + the episode range you are responsible for (e.g. episodes 11–20) + the beats that fall in this range. Produce the `episodes` entries for those episodes. **Output a JSON array only — no explanation, no fences.**
 
-## 每集三栏，缺一栏就是没写完
+## Three columns per episode; missing one means it is not finished
 
-| 栏 | 写什么 |
+| Column | What to write |
 | --- | --- |
-| `synopsis` | 这一集发生了什么。**叙述体**——出现 `「」“”` 引号对白就是在写剧本，validate 会拦 |
-| `hook` | 【钩子】让人点下一集的那个问题 |
-| `suspense` | 【悬念】埋着没解的线 |
+| `synopsis` | What happens in this episode. **Narrative voice** — quoted dialogue with `「」“”` means you are writing a script, and validate will block it |
+| `hook` | [Hook] the question that makes people click the next episode |
+| `suspense` | [Suspense] the buried thread left unresolved |
 
-## 硬规则
+## Hard rules
 
-- 落在你区间里的每个爽点（`beats[].episode`），对应那一集的梗概必须真的把 setup/payoff 演出来——爽点表说第 13 集打脸，第 13 集的梗概里就得有打脸
-- `sceneIds` / `characterIds` 只能用骨架里登记过的 id
-- 三人以上同框写 `crowdPlan`（拆解方案：机位怎么分、谁用背影和过肩带过）。校验按 `characterIds` 人数判，是代理指标——三人实际不同框的过场集，把事实写成方案即可（「三人分处两场，无同框，分场拍」），别空着
-- 梗概里出现雨、拥抱、人群、手部特写这类生成难点，写进 `warnings`（枚举：雨戏 / 肢体接触 / 人群 / 手部特写）。宁可多报
-- 只写你负责的区间，别越界补别人的集——合并时按 ep 排序拼接
+- For every beat that lands in your range (`beats[].episode`), the synopsis of that episode must actually play out the setup/payoff — if the beat table says episode 13 has a face-slap, episode 13's synopsis must contain the face-slap
+- `sceneIds` / `characterIds` may only use ids registered in the skeleton
+- When three or more people share a frame, write `crowdPlan` (the breakdown plan: how the camera splits them, who is handled with back views and over-the-shoulder shots). Validation judges by the number of `characterIds`, which is a proxy — for a transition episode where the three are not actually in frame together, write the fact as the plan ("three people in two separate scenes, never in frame together, shot scene by scene"); do not leave it empty
+- When the synopsis contains rain, hugging, crowds or hand close-ups — generation difficulties — put them in `warnings` (enum: 雨戏 rain scene / 肢体接触 physical contact / 人群 crowd / 手部特写 hand close-up). Better to over-report
+- Write only the range you are responsible for; do not overstep to fill in other people's episodes — they are sorted by ep and spliced together on merge
 
-## 批次大小
+## Batch size
 
-每批 ≤ 10 集。60 集一口气写，后半段一定崩——节奏塌、钩子重复、人物漂移。批与批之间靠骨架和爽点表对齐，不靠上一批的原文。
+At most 10 episodes per batch. Writing 60 episodes in one go will always collapse in the back half — the pacing sags, hooks repeat, characters drift. Batches are aligned with each other through the skeleton and the beat table, not through the previous batch's text.

@@ -1,11 +1,12 @@
 ---
 name: novel-characters
 description: |
-  从小说或短故事里拆出角色表、人物画像、形象提示词、音色提示词，
-  其中形象提示词含一张角色设定图的完整版面指令（左半身像 + 右全身三视图 + 细节条），
-  产出 JSON + Markdown + 可交互的 report.html。
-  报告语言可指定（--lang），默认中文，任意语言都支持；零依赖、零 API key、不出图。
-  Use when asked to 拆小说角色、分析人物、生成角色卡、character sheets from a novel。
+  Breaks a novel or short story into a cast list, character profiles, image prompts and voice prompts,
+  where the image prompt carries the full layout instruction for a character model sheet (left bust portrait
+  + right full-body turnaround + detail strip), and outputs JSON + Markdown + an interactive report.html.
+  The report language is configurable (--lang), Chinese by default, any language supported; zero dependencies,
+  zero API key, no image generation.
+  Use when asked to break a novel into characters, analyse the cast, generate character cards, or build character sheets from a novel.
 allowed-tools:
   - Read
   - Write
@@ -26,7 +27,7 @@ metadata:
   license: Apache-2.0
   requires:
     bins:
-      - node          # >= 18，只用标准库，无 npm 依赖
+      - node          # >= 18, standard library only, no npm dependencies
   runtimes:
     - claude-code
     - codex
@@ -34,103 +35,103 @@ metadata:
 
 ## novel-characters
 
-输入一篇小说/短故事，输出每个角色的：人物画像、形象提示词、音色提示词、角色设定图的版面指令。
+Takes a novel / short story and outputs, for each character: a profile, an image prompt, a voice prompt, and the layout instruction for a character model sheet.
 
-**本 skill 不出图，只产提示词。**出图是下游的事——它要选模型、选画风、选画幅，那三件事在这里一个都答不了。
+**This skill does not generate images, it only produces prompts.** Image generation is downstream work — it has to pick a model, a visual style and an aspect ratio, and this layer cannot answer any of those three.
 
-`{baseDir}` = 本文件所在目录。脚本 `{baseDir}/scripts/novel-characters.mjs`，零依赖，`node` 直接跑。
+`{baseDir}` = the directory this file lives in. The script is `{baseDir}/scripts/novel-characters.mjs`, zero dependencies, run it directly with `node`.
 
-**运行环境**：Claude Code 和 codex 都能跑，没有差别——这条管线全是 node 脚本加模型读写，不碰任何本机可执行文件。
+**Runtime**: Claude Code and codex both work, with no difference — this pipeline is all node scripts plus model reads and writes, and never touches a local executable.
 
 ---
 
-### Step 0 — 确定报告语言
+### Step 0 — Decide the report language
 
-用户可以指定语言，比如「用英文」「--lang en」「日本語で」。**没说就是中文（`zh`）。**
+The user can specify a language, e.g. "use English", "--lang en", "日本語で". **If none is given, it is Chinese (`zh`).**
 
-这个 `lang` 会一路传下去：第二趟生成角色卡时决定人类可读字段用什么语言，`validate` 和 `render` 也都要带上。
+This `lang` is passed all the way down: the second pass uses it to decide which language the human-readable fields are written in, and `validate` and `render` both need it too.
 
-**界面文案分两种情况：**
+**UI strings come in two cases:**
 
-- `zh` / `en` / `ja` —— 内置，不用管
-- **其他任何语言** —— 你要现场翻一份。跑
+- `zh` / `en` / `ja` — built in, nothing to do
+- **Any other language** — you translate a copy on the spot. Run
 
   ```bash
   node {baseDir}/scripts/novel-characters.mjs ui-template <lang>
   ```
 
-  它打印一份英文骨架，把每个值翻译成目标语言，整块放进 `cast.json` 顶层的 `ui` 字段。渲染时会合并进内置表。
+  It prints an English skeleton; translate every value into the target language and put the whole block into the `ui` field at the top level of `cast.json`. Rendering merges it over the built-in table.
 
-  **不给 `ui` 的话 `validate` 会直接报错**——否则报告会是「角色内容是法语、界面标签是英文」的半吊子状态。
+  **Without `ui`, `validate` fails outright** — otherwise the report ends up half-baked, with French character content and English UI labels.
 
-支持的语言不受内置表限制，法语韩语西班牙语都能出完整报告。
+Supported languages are not limited by the built-in table; French, Korean and Spanish all produce a fully localized report.
 
-### Step 1 — 定位输入
+### Step 1 — Locate the input
 
-用户给文件路径就直接用。直接粘正文的，**先落到一个临时 .txt**——后面校验「引文是否逐字」要拿原文比对，没有原文文件这步就没法做。
+If the user gives a file path, use it directly. If they paste the text in, **first save it to a temporary .txt** — the later check for "is the quote verbatim" compares against the source, and without a source file that step cannot be done.
 
-确定输出目录：用户指定就用；没指定就用原书同级目录。
+Decide the output directory: use the one the user specifies; if none, use the directory holding the source book.
 
-**有 `outline.json`（novel-outline 的产出）就一起要过来，走 seed**——大纲是角色设定的上游，它的 `characters` 块已经定死了角色清单：
+**If there is an `outline.json` (novel-outline's output), ask for it too and go through seed** — the outline sits upstream of the character design, and its `characters` block has already settled the roster:
 
 ```bash
 node {baseDir}/scripts/novel-characters.mjs seed <outline.json> > <workdir>/seed.json
 ```
 
-搬过来的是大纲已经拍板的事实，留空的是这一层才该做的设计：
+What comes across is what the outline has already decided; what is left blank is the design this layer owes:
 
-| outline 的字段 | seed 之后 |
+| outline field | after seed |
 | --- | --- |
-| `id` | 原样保留成角色码——下游 script / storyboard 用它引用角色 |
-| `name` | 角色表就照这份，**不再自己判断谁该进** |
-| `tier` | 映射成 `importance`：`lead` → `protagonist`、`support` → `supporting`、`functional` → `minor` |
-| `arc` | 直接落进 `persona.arc` |
-| `role` / `from` | 进 `seedNote`——定位（女主 / 反派）与「由原著的谁合并而来」，扫原文时知道该收哪几条线的戏 |
+| `id` | kept as the character code — downstream script / storyboard use it to reference characters |
+| `name` | the cast list follows this, **you no longer decide who is in** |
+| `tier` | mapped to `importance`: `lead` → `protagonist`, `support` → `supporting`, `functional` → `minor` |
+| `arc` | goes straight into `persona.arc` |
+| `role` / `from` | go into `seedNote` — the positioning (female lead / villain) and "which source characters were merged into this one", so you know which storylines to collect when scanning the source |
 
-留空待填：`aliases`（要读原文才知道）、`oneLiner`、`persona` 其余各项、`image`、`voice`。**seed 出来的是骨架不是成品**，直接跑 `validate` 会报一堆字段缺失，那是预期的——后面 Step 2–6 就是来填它的。
+Left blank to fill in: `aliases` (needs the source text), `oneLiner`, the rest of `persona`, `image`, `voice`. **What seed produces is a skeleton, not a finished product** — running `validate` straight away reports a pile of missing fields, which is expected; Steps 2–6 exist to fill it in.
 
-两处口径要守住：
+Two conventions to hold to:
 
-- **大纲定的分档不要推翻**。谁重要是改编阶段拍板的事，这一层只负责把定下来的人做深。真觉得分档不对，回去改大纲，别在这里悄悄改一个不一样的
-- **主角组内部可以细分**。outline 的 `lead` 是「男女主 + 主反派」一整组，对应 `protagonist` 与 `major` 两档，seed 一律给 `protagonist`；照 `seedNote` 里的定位把主角之外的改成 `major`，这不算推翻分档
+- **Do not overturn the tiers the outline decided.** Who matters is settled at the adaptation stage; this layer is only responsible for deepening the people already settled. If a tier really looks wrong, go fix the outline — do not quietly change it to something different here
+- **You may subdivide within the lead group.** The outline's `lead` is one whole group of "male lead + female lead + main antagonist", corresponding to the `protagonist` and `major` tiers; seed assigns everyone `protagonist`; using the positioning in `seedNote`, change the non-leads to `major` — that does not count as overturning the tiers
 
-**没有 `outline.json` 也照常跑**，本 skill 不依赖它——跳过 seed，从 Step 2 开始自己从原文拆角色表。
+**It runs fine without an `outline.json`**, too — this skill does not depend on it. Skip seed and start from Step 2, building the roster from the source yourself.
 
-### Step 2 — 分块
+### Step 2 — Chunk
 
 ```bash
 node {baseDir}/scripts/novel-characters.mjs chunk <book.txt> <workdir>
 ```
 
-打印 `{"chunks": N, ...}`。
+Prints `{"chunks": N, ...}`.
 
-- **N == 1**：跳过 Step 3，直接在当前会话读原文做第一趟，结果自己写成 `<workdir>/roster-00.json`
-- **N > 1**：进 Step 3
-- `truncated: true`：明确告诉用户尾部没扫到，别闷着
+- **N == 1**: skip Step 3, read the source in the current session for pass 1, and write the result yourself to `<workdir>/roster-00.json`
+- **N > 1**: go to Step 3
+- `truncated: true`: tell the user explicitly that the tail was not scanned — do not keep quiet about it
 
-### Step 3 — 第一趟扫描（仅 N > 1）
+### Step 3 — Pass 1 scan (only when N > 1)
 
-**当前环境支持子代理就并发**（Claude Code 的 Task、codex 的 subagent）：每块一个子代理，**所有调用放在同一条消息里**才是真并发。不支持就一块一块串行读，结果一样，只是慢。
+**Run concurrently if the current environment supports sub-agents** (Claude Code's Task, codex's subagent): one sub-agent per chunk, and **all calls in the same message** is what makes it actually concurrent. If unsupported, read chunk by chunk serially — same result, just slower.
 
-每个子代理的任务：
-1. 读 `{baseDir}/references/roster-pass.md`，照它执行
-2. 读 `<workdir>/chunk-NN.txt`
-3. 把 roster JSON 写到 `<workdir>/roster-NN.json`
-4. 只回一句「done NN，抽到 X 个角色」
+Each sub-agent's task:
+1. Read `{baseDir}/references/roster-pass.md` and follow it
+2. Read `<workdir>/chunk-NN.txt`
+3. Write the roster JSON to `<workdir>/roster-NN.json`
+4. Reply with one line only: "done NN, extracted X characters"
 
-### Step 4 — 归并 + 复核
+### Step 4 — Merge + review
 
 ```bash
 node {baseDir}/scripts/novel-characters.mjs merge <workdir> | tee <workdir>/merged.json
 ```
 
-落到 `merged.json` 不只是留档：Step 6 的 assemble 靠它拿同档角色的戏份顺序。
+Writing to `merged.json` is not just for the record: Step 6's assemble relies on it for the screen-time order of characters in the same tier.
 
-按名字+别名精确收敛（某块把「陆」列成「陆行远」的别名，两条就并成一个人），notes 累加、quotes 去重，按出现块数降序——出现的块越多戏份越重。
+Converge by exact name + alias (if one chunk lists "陆" as an alias of "陆行远", the two merge into one person); notes accumulate, quotes are de-duplicated, sorted by number of chunks seen descending — the more chunks a character appears in, the heavier the screen time.
 
-输出是 `{ "characters": [...], "mergeCandidates": [...] }`。**`mergeCandidates` 要逐条复核**：精确匹配只能收敛两块恰好写了相同称呼的情况，剩下的是语义判断，脚本做不了。候选来自名字包含关系（`「陆」⊂「陆行远」`）——是强信号不是判决，同姓的父子、兄弟就不能合。候选之外你自己看出来的同人（「陆先生」和「行远」没有包含关系，不会进候选）也要合。
+Output is `{ "characters": [...], "mergeCandidates": [...] }`. **Review `mergeCandidates` one by one**: exact matching can only converge cases where two chunks happen to write the same form of address; the rest is a semantic judgement a script cannot make. Candidates come from name containment (`「陆」⊂「陆行远」`) — a strong signal, not a verdict; same-surname fathers and sons, or brothers, must not be merged. Same-person cases you spot yourself outside the candidates ("陆先生" and "行远" have no containment relation, so they never appear as candidates) must be merged too.
 
-要合并就写一份 merges.json 再落地：
+To merge, write a merges.json and apply it:
 
 ```json
 { "merges": [{ "keep": "陆行远", "absorb": ["陆", "陆先生"] }] }
@@ -140,100 +141,98 @@ node {baseDir}/scripts/novel-characters.mjs merge <workdir> | tee <workdir>/merg
 node {baseDir}/scripts/novel-characters.mjs merge <workdir> --apply merges.json | tee <workdir>/merged.json
 ```
 
-`keep`/`absorb` 用名字或任一别名定位都行，找不到会直接报错。输出仍带 `mergeCandidates`，剩下的都确认是不同的人（或清空）再进下一步。没有要合的就直接往下走——但 `merged.json` 必须留着。
+`keep`/`absorb` locate by name or any alias; if not found it fails outright. The output still carries `mergeCandidates`; confirm the rest really are different people (or clear them) before moving on. If there is nothing to merge, just go on — but `merged.json` must be kept.
 
-### Step 5 — 选角
+### Step 5 — Casting
 
-取前 N 位。默认 30，用户说了就听用户的。剩下的角色在最后汇报里提一句「还识别出 X 位没做画像」。
+Take the top N. 30 by default; if the user says something, do what they say. Mention the rest in the final report: "X more characters were identified but not profiled".
 
-### Step 6 — 第二趟出卡
+### Step 6 — Pass 2, produce the cards
 
-每个角色一份，同样能并发就并发。
+One per character; again concurrent if possible.
 
-每份任务拿到：
-- `{baseDir}/references/profile-pass.md` 和 `{baseDir}/references/schema.md`（读它们，照着做）
-- **报告语言 `lang`**（Step 0 定的）
-- 该角色归并后的 `name` / `aliases` / `notes` / `quotes`
-- **同批其他角色的名字**（避免长相声线撞车）
+Each task receives:
+- `{baseDir}/references/profile-pass.md` and `{baseDir}/references/schema.md` (read them and follow them)
+- **The report language `lang`** (set in Step 0)
+- That character's merged `name` / `aliases` / `notes` / `quotes`
+- **The names of the other characters in the same batch** (to avoid clashing looks and voices)
 
-按 `profile-pass.md` 完成身份—外观语义自检后再交卡：人物档案、形象提示词、本地译文与设定图主体不能各说一种身份。大纲决定名单和改编取舍，原文观察补足外形依据；不要只给大纲而跳过 Step 2–4 的原文扫描。
+Complete the identity–appearance semantic self-check per `profile-pass.md` before handing a card over: the profile, the image prompt, the local translation and the sheet's subject must not each describe a different identity. The outline decides the roster and the adaptation choices; source observations supply the physical evidence — do not give only the outline and skip the Step 2–4 source scan.
 
-角色卡 JSON 写到 `<workdir>/card-<slug>.json`。**断点续跑**：`card-<slug>.json` 已存在的角色不必重跑。
+Write each character card JSON to `<workdir>/card-<slug>.json`. **Resumable**: characters whose `card-<slug>.json` already exists need not be re-run.
 
-**同时写一段故事摘要**：用 `lang` 指定的语言，3–5 句，交代时空背景、核心情境、这几个人聚在一起的由头。短篇直接从原文写；长篇从各块的 roster note 归纳。不剧透结局，不写成推荐语。写到 `<workdir>/summary.txt`。非内置语言的话，把 Step 0 翻好的 ui 整块存成 `<workdir>/ui.json`。
+**Also write a story summary**: in the language `lang` specifies, 3–5 sentences, giving the time and place, the core situation, and the reason these people are together. For a short piece, write it from the source directly; for a long one, summarise from each chunk's roster note. Do not spoil the ending or write it as a blurb. Write it to `<workdir>/summary.txt`. For a non-built-in language, save the whole `ui` block translated in Step 0 as `<workdir>/ui.json`.
 
-然后合成 cast.json——**用 assemble，不要手拼**（手拼会丢字段、写错顶层键）：
+Then assemble cast.json — **use assemble, do not hand-build it** (hand-building drops fields and writes the wrong top-level key):
 
 ```bash
 node {baseDir}/scripts/novel-characters.mjs assemble <workdir> \
-  --source <书名> --lang <lang> \
-  --out <输出目录>/<书名>-cast.json
+  --source <book name> --lang <lang> \
+  --out <output dir>/<book name>-cast.json
 ```
 
-坏卡会被逐个点名——哪份 `card-*.json` 坏了就只重跑那个角色，其他不用动。
+Bad cards are named one by one — if a `card-*.json` is bad, re-run only that character; the others need not change.
 
-同档角色的先后是戏份顺序，来自 Step 4 留下的 `<workdir>/merged.json`（assemble 自动读，也可用 `--order` 指别的文件）。报告左栏「按戏份排序」的序号就靠它——看到「同档角色将按文件名序」的警告说明 merged.json 丢了，回 Step 4 重新生成。
+The order of characters within a tier is screen-time order, taken from the `<workdir>/merged.json` left by Step 4 (assemble reads it automatically; you can also point `--order` at another file). The numbering in the report's left rail, "sorted by screen time", depends on it — if you see the warning "characters in the same tier will be ordered by filename", merged.json is lost; go back to Step 4 and regenerate it.
 
-### Step 7 — 校验 ⛔ 不能跳
+### Step 7 — Validate ⛔ Do not skip
 
 ```bash
 node {baseDir}/scripts/novel-characters.mjs validate <cast.json> <book.txt>
 ```
 
-记得带上 `--lang`（Step 0 定的）。检查：结构、`importance` 枚举、**引文逐字**、**出图提示词不含人名**、**语言分工**（人类字段跟随 `lang`、出图/TTS 提示词永远英文）、以及**非内置语言必须带 `ui`**。
+Remember to pass `--lang` (set in Step 0). It checks: structure, the `importance` enum, **verbatim quotes**, **no character names in image prompts**, **language split** (human fields follow `lang`; image / TTS prompts are always English), and **non-built-in languages must carry `ui`**.
 
-**有违规就按报错逐条修，改完重跑，直到通过。** 这四类错模型真的会犯——这套检查就是被真实输出打出来的。
+**Fix each violation as reported, re-run after fixing, until it passes.** Models really do make these four kinds of mistake — this set of checks was hammered out by real output.
 
-### Step 8 — 输出
+### Step 8 — Output
 
 ```bash
-cd <输出目录>
-node {baseDir}/scripts/novel-characters.mjs render <cast.json> --md   > <书名>-cast.md
+cd <output dir>
+node {baseDir}/scripts/novel-characters.mjs render <cast.json> --md   > <book name>-cast.md
 node {baseDir}/scripts/novel-characters.mjs render <cast.json> --html > report.html
 ```
 
-语言取 `cast.json` 里的 `lang`，要临时覆盖就加 `--lang <code>`。
+The language comes from `lang` in `cast.json`; to override temporarily, add `--lang <code>`.
 
-`render` 默认去 cast.json 同级的 `images/<slug>-sheet.png` 找图；图在别处就用 `--images <目录>`
-指过去（任意路径）。**本 skill 不产生这些文件**——下游出完图，重跑一次 render 就能把图嵌进报告。
+`render` looks for images at `images/<slug>-sheet.png` next to cast.json by default; if the images are elsewhere, point at them with `--images <dir>` (any path). **This skill does not produce these files** — once downstream has generated the images, re-run render and it will embed them into the report.
 
-report.html 的样式约定见 `{baseDir}/references/report-style.md`——要改样式先读它，别把它改回通用卡片墙。
+For the report.html style conventions see `{baseDir}/references/report-style.md` — read it before changing styles, and do not turn it back into a generic card wall.
 
-最终落地：
+Final layout:
 
 ```
-<输出目录>/
-├── <书名>-cast.json
-├── <书名>-cast.md
-├── report.html                    ← 双击就能开
-└── images/                        ← 本 skill 不写这个目录
-    └── <slug>-sheet.png           ← 下游出完图放这儿，render 会捡起来
+<output dir>/
+├── <book name>-cast.json
+├── <book name>-cast.md
+├── report.html                    ← double-click to open
+└── images/                        ← this skill does not write this directory
+    └── <slug>-sheet.png           ← downstream puts generated images here; render picks them up
 ```
 
-### Step 9 — 汇报
+### Step 9 — Report back
 
-一句话说清：角色数、报告路径。校验一次没过的话，说明修了什么。原文被截断要明确说清楚。
+In one sentence: the number of characters and the report path. If validation failed once, say what was fixed. If the source was truncated, state that explicitly.
 
-**不要说「已出图」或「已生成设定图」**——这一步不存在了，交付的是提示词。
+**Do not say "images generated" or "model sheets generated"** — that step does not exist here; the deliverable is prompts.
 
 ---
 
-## 边界
+## Boundaries
 
-- 单次上限 24 块（净覆盖约 93 万字符），超了会明确报 `truncated`，不静默截断
-- 人类可读字段跟随 `--lang`（默认中文）；出图和 TTS 提示词**永远英文**，那些引擎吃英文最稳
-- **本 skill 不出图。**`image.sheet` 是给下游的版面指令，版面最容易崩的几处（一张图两个长相、
-  为了塞细节把人物压扁、左栏收口）靠提示词里写死的几句压住，见 `references/sheet.md`
-- 想要能实时编辑、边跑边看的交互界面，那是另一个东西，不在这个 skill 里
+- A single run is capped at 24 chunks (~930k characters net), beyond which it explicitly reports `truncated` rather than silently cutting
+- Human-readable fields follow `--lang` (Chinese by default); image and TTS prompts are **always English**, since those engines are steadiest with English
+- **This skill does not generate images.** `image.sheet` is the layout instruction for downstream; the places where layout most often breaks (two faces in one image, squashing the figure to fit detail, closing off the left column) are held down by a few hard-wired sentences in the prompt, see `references/sheet.md`
+- Wanting a live-editable, watch-it-as-it-runs interface is a different thing, and not part of this skill
 
-## 自测
+## Self-test
 
 ```bash
 node {baseDir}/scripts/selftest.mjs
 ```
 
-329 项断言，不调模型、不花额度，覆盖分块 / 归并 / 合成 / 多语言 / 校验 / 渲染的全部确定性逻辑。改完脚本先跑这个。
+329 assertions, no model calls, no quota spent, covering all the deterministic logic in chunking / merging / assembly / localisation / validation / rendering. Run this first after changing the script.
 
-## 自带样例
+## Bundled sample
 
-`{baseDir}/examples/渡口.txt` 是一篇短故事，4 个角色，其中货郎全程只有绰号、船夫只被叫过「老伯」——专门用来验别名归并。对应产出 `渡口-cast.json` / `渡口-cast.md` 可以当质量基准，也是校验的自检夹具。
+`{baseDir}/examples/渡口.txt` is a short story with 4 characters, where the peddler is only ever referred to by a nickname and the ferryman is only ever addressed as "老伯" — it exists specifically to exercise alias merging. Its outputs `渡口-cast.json` / `渡口-cast.md` serve as a quality baseline and as validation fixtures.

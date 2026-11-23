@@ -1,27 +1,27 @@
-# 角色卡结构
+# Character card structure
 
-`cast.json` 顶层：
+`cast.json` top level:
 
 ```json
 {
   "source": "渡口",
   "lang": "zh",
   "summary": "民国年间的清晨，一条河的渡口浓雾未散。摆渡四十年的老船夫照常开船，先后上船的是……",
-  "characters": [ /* 角色卡 */ ]
+  "characters": [ /* character cards */ ]
 }
 ```
 
-| 顶层字段 | 必填 | 说明 |
+| Top-level field | Required | Notes |
 | --- | --- | --- |
-| `source` | 是 | 书名/篇名，报告标题用 |
-| `lang` | 是 | 报告语言，默认 `zh` |
-| `ui` | 视情况 | 界面文案翻译。`lang` 是 `zh`/`en`/`ja` 时**不需要**（内置）；其他任何语言**必填**，否则 `validate` 报错。用 `ui-template <lang>` 生成骨架后翻译。只覆盖部分键也可以，缺的用内置英文兜底 |
-| `summary` | 是 | **故事摘要**，中文 3–5 句。交代时空背景、核心情境、人物聚在一起的由头。报告顶部显示，让人不看原文也知道这几个角色是什么关系。不要剧透结局，也不要写成推荐语 |
-| `characters` | 是 | 角色卡数组 |
+| `source` | Yes | Book / piece title, used as the report title |
+| `lang` | Yes | Report language, `zh` by default |
+| `ui` | Conditional | UI string translations. **Not needed** when `lang` is `zh`/`en`/`ja` (built in); **required** for any other language, otherwise `validate` fails. Generate a skeleton with `ui-template <lang>` and translate it. Partial key coverage is allowed; missing keys fall back to the built-in English |
+| `summary` | Yes | **Story summary**, 3–5 sentences in Chinese. Gives the time and place, the core situation, and the reason these people are together. Shown at the top of the report so the reader knows how these characters relate without reading the source. Do not spoil the ending, and do not write it as a blurb |
+| `characters` | Yes | Array of character cards |
 
-`summary` 缺失会被 `validate` 判为违规——报告顶部会空着。
+A missing `summary` is flagged as a violation by `validate` — the top of the report would be blank.
 
-单张角色卡：
+A single character card:
 
 ```json
 {
@@ -63,40 +63,40 @@
 }
 ```
 
-## 语言分工
+## Language split
 
-「本地语言」= 顶层 `lang` 指定的语言，默认中文。
+"Local language" = the language given by the top-level `lang`, Chinese by default.
 
-| 字段 | 类型 | 语言 | 说明 |
+| Field | Type | Language | Notes |
 | --- | --- | --- | --- |
-| `name` | string | 原文 | 原文里用得最多的称呼 |
-| `aliases` | string[] | 原文 | 其他称谓；职业名词（如「货郎」）归 `identity`，不进这里 |
-| `importance` | enum | — | `protagonist` / `major` / `supporting` / `minor`，**只能这四个** |
-| `oneLiner` | string | **本地语言** | 一句话抓住这个人 |
-| `persona.*` | — | **本地语言** | `personality` 3–5 个词 |
-| `persona.evidence` | string[] | **原文语言** | **逐字引用**，永远不翻译——翻了就不是证据了。没有就空数组 |
-| `image.prompt` | string | **英文** | 单张人物图；**禁止出现人名**；**必须写明族裔／年代／地域，并保留身份对应的可见设计**，不指定渲染画风 |
-| `image.promptLocal` | string | 本地语言 | 上面那条的译文；`lang=en` 时省略；**同样禁止人名** |
-| `image.negativePrompt` | string | **英文** | 逗号分隔 |
-| `image.tags` | string[] | **英文** | 4–8 个检索标签：题材、年代、色板、材质、光照。**不打画风标**（`semi-realistic`、`painterly` 这类），画风出图时才定 |
-| `image.sheet` | string | **英文** | **角色设定图**，16:9 三区版面：左约 34% 半身像（面部基准）／右上全身三视图／右下细节条，细线分隔；**禁止出现人名**；**必须写明族裔／年代／地域** |
-| `voice.timbre/pitch/pace/accent/emotion/referenceHint` | string | **本地语言** | 最容易写漂的地方，注意 |
-| `voice.prompt` | string | **英文** | 给 TTS 音色设计引擎。**没有 `promptLocal` 对照版，这是有意的**——上面六项已经是本地语言，再给一段中文散文只会让人复制错，把它喂进 TTS（生产里踩过） |
+| `name` | string | source | The form used most often in the source |
+| `aliases` | string[] | source | Other forms of address; occupational nouns (e.g. "peddler") belong in `identity`, not here |
+| `importance` | enum | — | `protagonist` / `major` / `supporting` / `minor`, **only these four** |
+| `oneLiner` | string | **local language** | Captures this person in one sentence |
+| `persona.*` | — | **local language** | `personality` 3–5 words |
+| `persona.evidence` | string[] | **source language** | **Verbatim quotes**, never translated — translated, they are no longer evidence. Empty array if none |
+| `image.prompt` | string | **English** | A single character image; **character names forbidden**; **must state ethnicity / era / region and keep the visible design that matches identity**, without specifying a rendering style |
+| `image.promptLocal` | string | local language | Translation of the above; omit when `lang=en`; **character names forbidden here too** |
+| `image.negativePrompt` | string | **English** | Comma-separated |
+| `image.tags` | string[] | **English** | 4–8 retrieval tags: subject, era, palette, material, lighting. **No style tags** (`semi-realistic`, `painterly` and the like); style is decided at generation time |
+| `image.sheet` | string | **English** | **The character model sheet**, 16:9 three-zone layout: about 34% on the left for the bust portrait (facial baseline) / full-body turnaround top right / detail strip bottom right, separated by thin rules; **character names forbidden**; **must state ethnicity / era / region** |
+| `voice.timbre/pitch/pace/accent/emotion/referenceHint` | string | **local language** | The easiest place to drift; watch it |
+| `voice.prompt` | string | **English** | For the TTS voice-design engine. **There is no `promptLocal` counterpart, and this is intentional** — the six fields above are already in the local language, and another paragraph of Chinese prose would only make people copy the wrong one and feed it to TTS (hit in production) |
 
-**英文字段不跟随 `lang`。** 图像模型和 TTS 引擎吃英文最稳，跟报告用什么语言无关。
+**English fields do not follow `lang`.** Image models and TTS engines are steadiest with English, regardless of the report language.
 
-## 设定图的三区版面
+## The model sheet's three-zone layout
 
-16:9 横构图，细线分成三块：
+16:9 landscape, split into three blocks by thin rules:
 
-- **左（约 34%）** 半身像当**面部设计基准**，尺寸大、五官画得细，可以直接拿去做表情设计
-- **右上** 三视图管剪影、比例、服装，脸照左栏画
-- **右下** 细节条，4–5 个关键细节的小特写（配饰、道具、疤痕、鞋履……）
+- **Left (about 34%)** the bust portrait serves as the **facial design baseline** — large, with finely drawn features, directly usable for expression design
+- **Top right** the turnaround handles silhouette, proportion and clothing; the face is drawn to match the left column
+- **Bottom right** the detail strip, small close-ups of 4–5 key details (accessories, props, scars, footwear …)
 
-两个最容易崩的点：**一张图里出现两个长相**，以及**为了塞下细节把人物压扁**。提示词里都要写死——细节放不下就往右缘延伸，**永远是细节让位，不是人物让位**。
+The two places it most easily breaks: **two different faces appearing in one image**, and **squashing the figure to fit in the detail**. Both must be hard-wired in the prompt — if the detail will not fit, extend along the right edge, and **it is always the detail that gives way, never the figures**.
 
-## 校验
+## Validation
 
-`scripts/novel-characters.mjs validate <cast.json> <book.txt>` 会检查：结构完整性、`importance` 枚举、**引文逐字**、**出图提示词不含人名**、**语言分工**。违规逐条列出并 exit 1。
+`scripts/novel-characters.mjs validate <cast.json> <book.txt>` checks: structural integrity, the `importance` enum, **verbatim quotes**, **no character names in image prompts**, **language split**. Violations are listed one by one and it exits 1.
 
-脚本不判断衣着是否符合人物身份。该项由生成角色卡时按 `profile-pass.md` 的身份—外观语义自检完成；通过结构校验不代表造型语义已通过。
+The script does not judge whether the clothing suits the character's identity. That item is done by the identity–appearance semantic self-check in `profile-pass.md` when the card is generated; passing structural validation does not mean the look's semantics have passed.

@@ -2,16 +2,16 @@
 name: novel-script
 version: 2.0.0
 description: |
-  给 AI 短剧写剧本：把 novel-outline 的分集梗概落成结构化的场次 + 节拍流（动作节拍与台词行交替），
-  台词逐句带说话人与语气，时长逐集按语速确定性折算。产出 script.json + Markdown + 单页评审报告
-  （时长仪表 / 分集剧本 / 场次总表 / 按角色聚合的台词本，含导出 JSON）。
-  剧本管戏，分镜管拍——本 skill 不分镜头、无镜号、不写生成提示词，那些是下一层分镜 skill 的活。
-  10 道质量门全部由脚本确定性检查（每集时长 ±15%、单句 ≤35 字、说话人合法、钩子悬念落纸、
-  钩子具象前 3 拍内兑现（hookBeat 认领冷开场）、每场至少一个动作节拍、爽点认领、
-  角色/场景/光照/道具对账上游……）。
-  有 outline.json 就用 seed 预填每集骨架；给 --art 连光照状态一起对账。
-  零依赖、零 API key，用当前会话额度。
-  Use when asked to 写剧本、出剧本、台词、场次、写戏、screenwriting for AI short drama。
+  Writes the screenplay for an AI short drama: turns the episode synopses of novel-outline into structured scenes + a beat flow (action beats alternating with dialogue lines),
+  every line of dialogue carrying its speaker and delivery, with per-episode duration deterministically converted from speaking rate. Outputs script.json + Markdown + a single-page review report
+  (duration gauge / per-episode script / scene master table / per-character dialogue book, with JSON export).
+  The script handles the drama, the storyboard handles the shooting — this skill does no shots, has no shot numbers, and writes no generation prompts; those are the next layer's storyboard skill.
+  All 10 quality gates are checked deterministically by script (per-episode duration ±15%, single line ≤35 characters, valid speaker, hook and suspense on paper,
+  the concrete hook delivered within the first 3 beats (hookBeat claims the cold open), at least one action beat per scene, beat claims,
+  characters / scenes / lighting / props reconciled with upstream…).
+  With an outline.json, use seed to prefill each episode's skeleton; give --art to reconcile lighting states as well.
+  Zero dependencies, zero API key, uses the current session's quota.
+  Use when asked to write a screenplay, produce a script, write dialogue, write scenes, write the drama, or screenwriting for AI short drama.
 allowed-tools:
   - Read
   - Write
@@ -20,19 +20,19 @@ allowed-tools:
   - Glob
 triggers:
   - novel-script
-  - 剧本
-  - 写剧本
-  - 出剧本
-  - 写台词
-  - 场次
-  - 写戏
+  - screenplay
+  - write a script
+  - produce a script
+  - write dialogue
+  - scenes
+  - write the drama
   - screenplay
   - script
 metadata:
   license: Apache-2.0
   requires:
     bins:
-      - node          # >= 18，只用标准库，无 npm 依赖
+      - node          # >= 18, standard library only, no npm dependencies
   runtimes:
     - claude-code
     - codex
@@ -40,120 +40,120 @@ metadata:
 
 ## novel-script
 
-给 AI 短剧写**剧本**。**前提刻在骨子里：剧本管戏，分镜管拍**——「爽不爽」和「怎么拍」是两种迭代节奏，台词要反复推翻重写，绑上镜头分解每改一句都得重排镜头。所以这层只有集、场次、节拍流，没有镜号；镜头、首帧提示词、生成批次都是下一层分镜 skill 的活。
+Writes the **screenplay** for an AI short drama. **The premise is built in: the script handles the drama, the storyboard handles the shooting** — "is it satisfying" and "how to shoot it" iterate at two different rhythms; dialogue has to be overturned and rewritten again and again, and tying it to a shot breakdown would mean reshuffling shots for every changed line. So this layer has only episodes, scenes and a beat flow, with no shot numbers; shots, first-frame prompts and generation batches are the next layer's storyboard skill.
 
-但有一条底线：**台词必须是结构化数据，不能写成散文**。每句台词是独立条目（说话人 + 台词 + 语气），动作是独立节拍——这是全部确定性检查的地基：
+There is one bottom line, though: **dialogue must be structured data, not prose**. Each line is its own entry (speaker + line + delivery), and each action is its own beat — this is the foundation of all the deterministic checks:
 
-| 交付 | 解决什么 |
+| Deliverable | What it solves |
 | --- | --- |
-| 逐集时长预算 | 一集三分钟就是三分钟：台词按语速折算、动作按节拍估时，写超写欠当场拦下，不流到生成环节才发现 |
-| 节拍流（动作 ⇄ 台词） | 台词直接对接 TTS 逐句生成；动作节拍就是画面要发生的事。混成散文两头都喂不进管线 |
-| 每场至少一个动作节拍 | 纯对白的场是广播剧——AI 生成时没有画面可写 |
-| 开场钩子 + 结尾悬念 | 短剧的生死线，每集都要落在纸面；**钩子不是标签是第一拍**——`hookBeat` 认领具象位置，必须落在全集前 3 拍内（冷开场） |
-| 爽点认领 | 大纲说这一集有大爆点，剧本必须有戏认领它——防止改着改着把爆点改丢 |
-| 上游对账 | 场景/光照/道具对 art.json、角色对 outline.json，写了美术没登记的光照状态当场报 |
+| Per-episode duration budget | A three-minute episode is three minutes: dialogue is converted by speaking rate and actions estimated by beat, so over- and under-writing is stopped on the spot instead of being found only at the generation stage |
+| Beat flow (action ⇄ dialogue) | Dialogue connects directly to line-by-line TTS generation; an action beat is what has to happen on screen. Mixed into prose, neither can be fed into the pipeline |
+| At least one action beat per scene | A scene of pure dialogue is a radio play — there is no image to write when AI generates |
+| Opening hook + closing suspense | The life-or-death line of short drama; every episode must put both on paper; **the hook is not a label but the first beat** — `hookBeat` claims the concrete position, which must fall within the first 3 beats of the episode (cold open) |
+| Beat claims | The outline says this episode has a big reveal, and the script must have a scene that claims it — guarding against the reveal being edited away along the way |
+| Upstream reconciliation | Scenes / lighting / props against art.json, characters against outline.json; writing a lighting state the art did not register is reported on the spot |
 
-`{baseDir}` = 本文件所在目录。脚本 `{baseDir}/scripts/novel-script.mjs`，零依赖，`node` 直接跑。
+`{baseDir}` = the directory this file is in. The script is `{baseDir}/scripts/novel-script.mjs`, zero dependencies, run directly with `node`.
 
-**边界（不做的事）**：不分镜头、无镜号、不写画面生成提示词、不出图、不配乐——分镜层的活一件不碰。不改大纲结构（砍线合人是 `novel-outline` 的活）；不做角色和场景设定（`novel-characters` / `novel-art` 的活）。
+**Boundaries (what it does not do)**: no shots, no shot numbers, no image-generation prompts, no image generation, no music — none of the storyboard layer's work is touched. It does not change the outline's structure (cutting lines and merging people is `novel-outline`'s job); it does not design characters or scenes (that is for `novel-characters` / `novel-art`).
 
 ---
 
-### Step 0 — 定输入与范围
+### Step 0 — Settle the input and scope
 
-**outline.json 是剧本的直接上游**（分集梗概、爽点落点、单集时长都在里面），标准流程从它开始。没有的话先问用户是否跑 `novel-outline`；用户坚持直接写，就问清集数与单集分钟数，手建骨架，对账门会明说跳过。
+**outline.json is the script's direct upstream** (the episode synopses, beat placements and per-episode length are all in it), and the standard flow starts from it. If there is none, first ask the user whether to run `novel-outline`; if the user insists on writing directly, ask the number of episodes and per-episode minutes, build the skeleton by hand, and the reconciliation gates will say plainly that they are skipped.
 
-**一次写几集**：默认一批 ≤ 3 集。剧本是全管线改得最凶的一层，小批量出、快拍板、再往下写。用户明确要全剧也分批产出，每批过一次校验。
+**How many episodes at a time**: by default, a batch is ≤ 3 episodes. The script is the layer that changes the most across the whole pipeline, so produce small batches, get sign-off quickly, then write further. If the user explicitly wants the whole show, it is also produced in batches, with a validation pass for each batch.
 
-顺手带上（都可选，给了才对账/显示名字）：
+Bring these along (all optional; names are reconciled/shown only if given):
 
-- `--outline`：角色引用对账 + 爽点认领检查 + 报告里 C01 显示成人名
-- `--art`：场景/光照状态/道具对账 + 报告里 S01 显示成场景名
+- `--outline`: character-reference reconciliation + beat-claim check + C01 shown as a person's name in the report
+- `--art`: scene / lighting state / prop reconciliation + S01 shown as the scene's name in the report
 
-### Step 1 — seed 骨架
+### Step 1 — Seed the skeleton
 
 ```bash
 node {baseDir}/scripts/novel-script.mjs seed <outline.json> --eps 1-3 > <workdir>/script.json
 ```
 
-确定性搬运：目标秒数（单集分钟 × 60）、钩子、悬念、该集爽点认领、候选场景与人物（进 `seedNote`）。**这些事实不要让模型重新想一遍。** scenes 留空，那才是写戏的活。
+Deterministic transfer: target seconds (per-episode minutes × 60), hook, suspense, the beats this episode must claim, candidate scenes and people (into `seedNote`). **Do not make the model re-derive these facts.** scenes are left empty — that is the work of writing the drama.
 
-### Step 2 — 逐集写戏
+### Step 2 — Write the drama, episode by episode
 
-每集一份任务，能并发就并发。每份任务拿到：
+One task per episode; concurrent where possible. Each task receives:
 
-- `{baseDir}/references/script-pass.md` 和 `{baseDir}/references/schema.md`（读它们，照着做）
-- 该集的 seed 骨架 + 大纲里这一集的梗概/爽点/人群方案
-- 该集用到的场景卡（art.json 里的锚点、光照状态）与角色信息（性情、说话方式——有 cast.json 更好）
-- **前一集的结尾悬念**（这一集的开场要接得上）
+- `{baseDir}/references/script-pass.md` and `{baseDir}/references/schema.md` (read them and follow them)
+- That episode's seed skeleton + the outline's synopsis / beats / crowd plan for this episode
+- The scene cards used by that episode (anchors and lighting states in art.json) and character information (temperament, way of speaking — better with a cast.json)
+- **The previous episode's closing suspense** (this episode's opening must connect to it)
 
-核心要求都在 script-pass.md 里，最重的四条：**动作节拍只写常见动作**（挑担上船、搭手卸担这种 AI 见过千万次的；伸篙一挡、睫毛颤这种精巧动作生成必崩）；**时长预算先于一切**（三分钟一集约 50 个节拍，写完自己跑一遍 validate 看秒数）；台词口语、单句一口气、**谁的话像谁**（有 cast.json 就吃角色的性情与说话方式）；**每集第 1 拍冷开场给钩子的具象**（`hookBeat` 认领，门查位置），结尾一拍必须是悬念。
+The core requirements are all in script-pass.md; the four heaviest are: **action beats use only common actions** (carrying a pole onto a boat, helping unload the pole — things AI has seen tens of millions of times; delicate actions like thrusting a pole to block or eyelashes trembling will always collapse in generation); **the duration budget comes before everything** (a three-minute episode is about 50 beats; after writing, run validate yourself to see the seconds); dialogue is colloquial, each line fits in one breath, **and each person sounds like themselves** (with a cast.json, take the character's temperament and way of speaking); **beat 1 of every episode is a cold open that gives the concrete form of the hook** (claimed by `hookBeat`, with the gate checking its position), and the last beat must be suspense.
 
-写完把 `seedNote` 删掉。
+Delete the `seedNote` when done writing.
 
-### Step 3 — 校验 ⛔ 不能跳
+### Step 3 — Validate ⛔ do not skip
 
 ```bash
 node {baseDir}/scripts/novel-script.mjs validate <script.json> \
   --outline <outline.json> --art <art.json>
 ```
 
-10 道质量门全是代码：每集时长在目标 ±15% 内（台词按 4.5 字/秒折算、动作按 2.5 秒/拍，`params` 可调）、单句台词 ≤ 35 字、说话人在本场人物里或标 `VO`、每集钩子悬念落纸、**钩子具象在全集前 3 拍内兑现**（`hookBeat` 认领，`params.hookWindow` 可调）、每场至少一个动作节拍、动作叙述体不混引号台词、爽点认领、角色对账、场景/光照/道具对账。
+All 10 quality gates are code: per-episode duration within the target ±15% (dialogue at 4.5 characters/second, action at 2.5 seconds/beat, adjustable via `params`), single line ≤ 35 characters, speaker in the scene's characters or marked `VO`, hook and suspense on paper for every episode, **the concrete hook delivered within the first 3 beats of the episode** (claimed by `hookBeat`, `params.hookWindow` adjustable), at least one action beat per scene, action narration not mixed with quoted dialogue, beat claims, character reconciliation, scene / lighting / prop reconciliation.
 
-**有违规逐条修，改完重跑，直到通过。** 写超了先砍动作节拍再压台词；写欠了补戏不注水——加冲突不加寒暄。需要一个美术没登记的光照状态时，去 art.json 里补状态再回来，不要绕过门。
+**Fix every violation one by one, re-run after each fix, until it passes.** If you wrote too much, cut action beats first, then compress dialogue; if too little, add drama without padding — add conflict, not pleasantries. If you need a lighting state the art did not register, go and add the state in art.json and come back; do not go around the gate.
 
-### Step 4 — 输出与汇报
+### Step 4 — Output and report
 
 ```bash
-cd <输出目录>
-node {baseDir}/scripts/novel-script.mjs render <剧名>-script.json --md \
-  --outline <outline.json> --art <art.json> > <剧名>-script.md
-node {baseDir}/scripts/novel-script.mjs render <剧名>-script.json --html \
+cd <output directory>
+node {baseDir}/scripts/novel-script.mjs render <title>-script.json --md \
+  --outline <outline.json> --art <art.json> > <title>-script.md
+node {baseDir}/scripts/novel-script.mjs render <title>-script.json --html \
   --outline <outline.json> --art <art.json> --cast <cast.json> > script-report.html
-# 英文界面：加 --lang en（默认中文，也可跟 script.json 顶层的 lang 字段）
+# English UI: add --lang en (Chinese by default, or follow the top-level lang field of script.json)
 ```
 
-报告含：KPI 带（含台词占比）、时长仪表（每集条形打在目标区间带上，超欠标红）、分集剧本（一排两集，场次信息超过 300px 渐隐截断、点开展开）、场次总表、**台词本**（一排两个，按角色聚合、列表六行高可滚动、整组复制；给了 `--cast` 每个角色组头带**音色提示词**按钮——台词和音色一页配齐直接跑 TTS）、质量门面板、导出 JSON（下载的就是 script.json 原样）。
+The report contains: KPI band (including dialogue share), duration gauge (each episode's bar set against the target band, with over/under marked red), per-episode script (two episodes per row, scene information fading and truncating past 300px, click to expand), scene master table, **dialogue book** (two per row, aggregated by character, the list six rows high and scrollable, whole-group copy; with `--cast`, each character group header carries a **voice prompt** button — dialogue and voice together on one page, ready to run TTS), quality-gate panel, and JSON export (the download is script.json verbatim).
 
-汇报一句话说清：几集几场几句台词、预估总时长 vs 目标、哪几集贴着容差边、报告路径；没过的门明说。
+Report in one sentence: how many episodes, scenes and lines of dialogue, estimated total duration vs. target, which episodes hug the edge of the tolerance, and the report path; say plainly which gates did not pass.
 
-最终落地：
+Final layout:
 
 ```
-<输出目录>/
-├── <剧名>-script.json
-├── <剧名>-script.md
-└── script-report.html             ← 双击就能开
+<output directory>/
+├── <title>-script.json
+├── <title>-script.md
+└── script-report.html             ← opens with a double-click
 ```
 
 ---
 
-## 四个 skill 的接力
+## The four skills in sequence
 
 ```
-novel-outline    → outline.json （什么：结构与分集）
-novel-characters → cast.json    （谁：角色资产）
-novel-art        → art.json     （哪里 + 手里拿的：美术资产）
-novel-script     → script.json  （戏：场次、节拍、台词）
+novel-outline    → outline.json (what: structure and episodes)
+novel-characters → cast.json    (who: character assets)
+novel-art        → art.json     (where + what is held: art assets)
+novel-script     → script.json  (the drama: scenes, beats, dialogue)
 ```
 
-seed 吃 outline.json；validate/render 的 `--outline` `--art` 负责对账和显示名字。四份 JSON 各自的报告都带导出按钮，改完都能喂回各自的 render/validate。往下一层是分镜：镜号、单镜头时长、首帧提示词、生成批次单都在那边。
+seed takes outline.json; the `--outline` and `--art` of validate/render handle reconciliation and name display. All four JSONs' reports carry an export button, and after editing, each can be fed back to its own render/validate. The next layer down is the storyboard: shot numbers, per-shot duration, first-frame prompts and generation batch sheets are all there.
 
-## 边界
+## Boundaries
 
-- 报告界面内置中英（`--lang`，默认中文、或跟 script.json 的 `lang` 字段）；台词语言跟剧走
-- 时长是**估算不是秒表**——容差 ±15% 就是为此留的；`params.charsPerSecond` 按配音语速可调
-- `VO` 是画外音统一记号，谁的心声写在 `delivery` 里；台词本里 VO 单独成组
-- 不设每集场次上限——AI 换景不要钱，换景次数只进 KPI 统计不设门
+- The report UI has built-in Chinese and English (`--lang`, Chinese by default, or follow the `lang` field of script.json); the dialogue language follows the show
+- Duration is an **estimate, not a stopwatch** — the ±15% tolerance is left for exactly that; `params.charsPerSecond` is adjustable to the dubbing rate
+- `VO` is the single marker for voice-over, and whose inner voice it is goes in `delivery`; VO forms its own group in the dialogue book
+- There is no per-episode cap on scenes — AI scene changes are free, so the count of scene changes only enters the KPI statistics and has no gate
 
-## 自测
+## Self-test
 
 ```bash
 node {baseDir}/scripts/selftest.mjs
 ```
 
-154 项断言，不调模型、不花额度。10 道质量门每一道都有击穿用例。改完脚本先跑这个。
+154 assertions, no model calls, no quota spent. Every one of the 10 quality gates has a test that defeats it. Run this first after changing the script.
 
-## 自带样例
+## Bundled sample
 
-`{baseDir}/examples/渡口-script.json`：《渡口》**全 6 集完整剧本**（9 场 123 句台词，每集冷开场兑现钩子、都落在 120 秒 ±15% 内），对着 novel-outline 与 novel-art 的样例全部质量门通过。当质量基准，也是自测夹具。
+`{baseDir}/examples/渡口-script.json`: the **complete 6-episode script** of *The Ferry* (《渡口》) (9 scenes, 123 lines of dialogue, every episode's cold open delivering its hook, all within 120 seconds ±15%), with every quality gate passing against the novel-outline and novel-art samples. It serves as the quality baseline and also as the self-test fixture.

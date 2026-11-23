@@ -1,79 +1,79 @@
-# 出图模型
+# Image models
 
-四种，在 `config` 里选。主图（锚点）和派生图可以分开设，重出单张可以使用 `gen --model` 临时换。
-适配器都在 `scripts/models.mjs`，统一接口：给 `{text, negative, ratio, refs[文件路径], seed}`，返回 PNG 字节。
+Four, chosen in `config`. The main image (anchor) and the derived images can be set separately, and regenerating a single image can switch temporarily with `gen --model`.
+The adapters are all in `scripts/models.mjs`, with a unified interface: given `{text, negative, ratio, refs[file paths], seed}`, they return PNG bytes.
 
-尺寸三档（四个模型通用，都满足 gpt-image-2 的尺寸规则，也都落在视频模型参考图的交集里）：
+Three sizes (shared by all four models, all satisfying gpt-image-2's size rules and all falling within the intersection of video-model reference images):
 
-| 比例 | 尺寸 | 用在 |
+| Ratio | Size | Used for |
 | --- | --- | --- |
-| 2:3 | 1056×1584 | 正面全身、侧面、背面 |
-| 4:5 | 1152×1440 | 大头照 |
-| 1:1 | 1328×1328 | 细节 |
+| 2:3 | 1056×1584 | Front full-body, profile, back |
+| 4:5 | 1152×1440 | Headshot |
+| 1:1 | 1328×1328 | Detail |
 
-视频模型参考图的交集（H3 / Wan / Seedance）：单边 300–5760 像素、宽高比 0.4–2.5、单张 ≤20MB。检查门就按这个查。
+The intersection of video-model reference images (H3 / Wan / Seedance): each side 300–5760 pixels, aspect ratio 0.4–2.5, a single image ≤20MB. The check gates check by this.
 
-## qwen —— Qwen Image 2.1（自己的 ComfyUI）
+## qwen — Qwen Image 2.1 (your own ComfyUI)
 
-- 连接：`COMFY_URL`，有鉴权再给 `COMFY_USER` / `COMFY_PASS`（Basic）。放环境变量，或 `config --qwen-env-file <.env>`
-- 工作流：`UNETLoader`（`qwen_image_2.1_int8_convrot.safetensors`）→ `ModelSamplingAuraFlow`（shift 3.1）→
-  `KSampler`（euler / simple，20 步，cfg 2.5）；`CLIPLoader`（`qwen3vl_8b_int8_convrot.safetensors`，type `qwen_image`）；
-  `VAELoader`（`qwen_image_2.1_vae_bf16.safetensors`）；`EmptySD3LatentImage` 给尺寸
-- 锚点使用 `CLIPTextEncode` 文生图；派生图使用 `TextEncodeQwenImageEditPlus`，参考图接 `image1..3`（最多 3 张，本 skill 最多挂 2 张）
-- 参考图先 `POST /upload/image`，再 `POST /prompt`，轮询 `/history/<id>`，从 `/view` 取图
-- 服务器上模型文件名不一样，改 `config.local.json` 里 `models.qwen` 的 `unet` / `clip` / `vae`
-- 实测：每张 25–50 秒，尺寸精确，身份一致性好；角度和取景全靠提示词第一句（见 `prompting.md`）
+- Connection: `COMFY_URL`, and if there is authentication also `COMFY_USER` / `COMFY_PASS` (Basic). Put them in environment variables, or `config --qwen-env-file <.env>`
+- Workflow: `UNETLoader` (`qwen_image_2.1_int8_convrot.safetensors`) → `ModelSamplingAuraFlow` (shift 3.1) →
+  `KSampler` (euler / simple, 20 steps, cfg 2.5); `CLIPLoader` (`qwen3vl_8b_int8_convrot.safetensors`, type `qwen_image`);
+  `VAELoader` (`qwen_image_2.1_vae_bf16.safetensors`); `EmptySD3LatentImage` for the size
+- The anchor uses `CLIPTextEncode` text-to-image; derived images use `TextEncodeQwenImageEditPlus`, with reference images connected to `image1..3` (at most 3; this skill attaches at most 2)
+- Reference images are first sent with `POST /upload/image`, then `POST /prompt`, polling `/history/<id>`, and fetching the image from `/view`
+- If the model file names on the server differ, change `unet` / `clip` / `vae` of `models.qwen` in `config.local.json`
+- Tested: 25–50 seconds per image, exact sizes, good identity consistency; angle and framing depend entirely on the first sentence of the prompt (see `prompting.md`)
 
-## codex —— codex 内置出图（GPT）
+## codex — codex built-in image generation (GPT)
 
-- 调本机 `codex exec`，参考图通过 `-i` 挂上，提示词从标准输入给；自动找版本最高的 codex，也可 `--codex-bin` 指定
-- **不要 API key，但吃 ChatGPT 订阅额度**：Plus 约 25 张触顶（`usage_limit_reached`），几小时后恢复。一部剧角色多时不够，
-  使用它出锚点或补救单张，批量派生交给 qwen / openai
-- 内置工具不收尺寸参数，比例写进提示词；实测照出了严格的 2:3 和 4:5
-- 每张 80–160 秒。登录失效会报 401，`codex logout && codex login`
-- **出的是透明背景 PNG**（看图软件显示成白底，实际是透明的黑）。存盘前自动铺成白底，记录里留注——视频模型拿到透明图怎么处理背景说不准
-- 实测：角度最准（45° 更接近 45°），细节图材质最好
+- Calls the local `codex exec`, attaches reference images through `-i`, and gives the prompt on standard input; it automatically finds the highest-version codex, which can also be specified with `--codex-bin`
+- **No API key needed, but it uses ChatGPT subscription quota**: Plus caps out at about 25 images (`usage_limit_reached`), recovering after a few hours. It is not enough for a show with many characters,
+  so use it for anchors or to rescue a single image, and leave bulk derived images to qwen / openai
+- The built-in tool takes no size parameter, so the ratio is written into the prompt; testing produced strict 2:3 and 4:5
+- 80–160 seconds per image. An expired login reports 401; `codex logout && codex login`
+- **The output is a transparent-background PNG** (image viewers show it as a white background, but it is actually transparent black). It is automatically flattened onto white before saving, with a note kept in the record — how a video model would handle the background of a transparent image cannot be predicted
+- Tested: the most accurate angles (45° is closer to 45°), and the best material rendering in detail images
 
-## openai —— OpenAI Images API（GPT Image 2）
+## openai — OpenAI Images API (GPT Image 2)
 
-- key：`OPENAI_API_KEY`，放环境变量或 `config --openai-env-file <.env>`；接口地址默认 `https://api.openai.com/v1`，
-  兼容 OpenAI 格式的中转使用 `--openai-base-url`（或 `.env` 里的 `OPENAI_BASE_URL`）
-- 锚点走 `POST /images/generations`；派生图走 `POST /images/edits`（multipart，参考图作为 `image[]`）
-- 默认 `gpt-image-2`、`quality: high`。gpt-image-2 尺寸任意（两边 16 的倍数、总像素 655,360–8,294,400），
-  参考图恒为高保真，不收 `input_fidelity`；没有反向词参数，反向词拼成提示词末尾的 `Avoid: …`
-- 换成 `gpt-image-1` 系列会传 `input_fidelity=high`，但它们只支持 1024×1024 / 1024×1536 / 1536×1024，
-  本 skill 的尺寸会被接口拒掉——只用 gpt-image-2
-- **只使用本地假服务器验过请求格式，没有使用真 key 跑过**。第一次使用先出一张锚点确认
+- Key: `OPENAI_API_KEY`, in an environment variable or `config --openai-env-file <.env>`; the endpoint defaults to `https://api.openai.com/v1`,
+  and relays compatible with the OpenAI format use `--openai-base-url` (or `OPENAI_BASE_URL` in `.env`)
+- The anchor goes through `POST /images/generations`; derived images go through `POST /images/edits` (multipart, with reference images as `image[]`)
+- Defaults to `gpt-image-2`, `quality: high`. gpt-image-2 takes any size (both sides multiples of 16, total pixels 655,360–8,294,400),
+  reference images are always high fidelity, and `input_fidelity` is not accepted; there is no negative-prompt parameter, so negative words are appended to the end of the prompt as `Avoid: …`
+- Switching to the `gpt-image-1` family would send `input_fidelity=high`, but they support only 1024×1024 / 1024×1536 / 1536×1024,
+  and this skill's sizes would be rejected by the endpoint — use only gpt-image-2
+- **The request format has been verified only against a local fake server, and has not been run with a real key.** The first time you use it, generate one anchor to confirm
 
-## custom:<名字> —— 自定义命令
+## custom:<name> — custom command
 
 ```bash
 node scripts/character-refs.mjs config --custom 'mine=mytool --prompt-file {prompt_file} --neg-file {negative_file} --ref {refs} --size {width}x{height} --out {out}'
 node scripts/character-refs.mjs config --model custom:mine
 ```
 
-占位符（全部自动加引号，未知的原样保留）：
+Placeholders (all automatically quoted, unknown ones left as they are):
 
-| 占位符 | 值 |
+| Placeholder | Value |
 | --- | --- |
-| `{prompt}` / `{negative}` | 提示词 / 反向词正文；Windows 命令行会把换行折成空格，需要保留换行时使用下面的文件占位符 |
-| `{prompt_file}` / `{negative_file}` | 写好的文本文件路径（长提示词使用这个更稳） |
-| `{refs}` | 参考图路径，空格分隔；锚点没有参考图时为空 |
-| `{ref1}` `{ref2}` `{ref3}` | 单张参考图，没有就是空字符串 |
-| `{out}` | 命令必须把 PNG 写到这里 |
-| `{width}` `{height}` `{ratio}` | 尺寸与比例 |
-| `{seed}` | 种子 |
+| `{prompt}` / `{negative}` | The prompt / negative-prompt body; the Windows command line folds newlines into spaces, so use the file placeholders below when newlines must be kept |
+| `{prompt_file}` / `{negative_file}` | The path of the written text file (more reliable for long prompts) |
+| `{refs}` | Reference image paths, space-separated; empty when the anchor has no reference images |
+| `{ref1}` `{ref2}` `{ref3}` | A single reference image; an empty string if there is none |
+| `{out}` | The command must write the PNG here |
+| `{width}` `{height}` `{ratio}` | Size and ratio |
+| `{seed}` | Seed |
 
-同一条模板要能处理有参考图和没有参考图两种情况（锚点没有）。命令退出后 `{out}` 不存在就算失败，报错带上 stderr 前 300 字。
+The same template must handle both the case with reference images and the case without (the anchor has none). If `{out}` does not exist after the command exits, it counts as a failure, and the error carries the first 300 characters of stderr.
 
-## 换模型
+## Switching models
 
-一致性来自同一张锚点，不来自同一个模型。实测组合（沈知微，每种 1 个种子）：
+Consistency comes from the same anchor image, not from the same model. Tested combinations (沈知微, 1 seed each):
 
-| 锚点 | 派生 | 结果 |
+| Anchor | Derived | Result |
 | --- | --- | --- |
-| Qwen | GPT | 7/7 一次全对，细节图最好 |
-| GPT | Qwen | 可用，Qwen 完全跟随 GPT 锚点的设计（七分袖也照着出） |
-| Qwen | Qwen + GPT 混用 | 衔接得上，细节图之间有轻微亮度差 |
+| Qwen | GPT | 7/7 all correct on the first try, best detail images |
+| GPT | Qwen | Usable, and Qwen follows the GPT anchor's design completely (even the three-quarter sleeves come out as given) |
+| Qwen | Qwen + GPT mixed | Connects up, with a slight brightness difference between detail images |
 
-推荐：派生默认 qwen（快、不吃额度），出不好的单张使用 `gen <视图> --model codex` 重出。
+Recommended: derived images default to qwen (fast, uses no quota), and for a single image that does not come out well, regenerate with `gen <view> --model codex`.

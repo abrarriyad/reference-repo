@@ -2,14 +2,14 @@
 name: novel-staging
 version: 1.0.1
 description: |
-  给 AI 短剧的每一场排开场站位：先从场景图里认出能站能坐的东西（推算到俯视平面上），
-  再按剧本给每一场排谁在哪件东西的哪一侧、坐还是站、面朝哪、有没有群演，
-  程序写出每一场的开场走位句，分镜这一场第一段照抄它。
-  默认交付能拖动调整站位的 HTML 工具报告，页面内可导出 staging.json；JSON 同时作为工作数据保存，Markdown 按需导出。
-  8 道质量门全部由脚本确定性检查（认图件数、东西在图上、出场人物不多不少、在场的人落在认出来的东西上、
-  同一侧不叠人、群演写明在哪……）。吃 novel-script 的 script.json 和 novel-art 的 art.json 预填骨架。
-  零依赖、零 API key。
-  Use when asked to 站位、开场站位、群戏站位、谁坐在哪、排座位、走位、blocking、staging for AI short drama。
+  Plans the opening blocking for every scene of an AI short drama: first it recognizes what can be stood on or sat on from the scene image (reckoned onto a top-down plan),
+  then, following the script, for each scene it plans who is at which side of which object, sitting or standing, facing which way, and whether there are extras,
+  and the program writes each scene's opening blocking sentence, which the storyboard copies verbatim for that scene's first segment.
+  The default deliverable is an HTML tool report in which you can drag to adjust positions, with staging.json exportable from the page; the JSON is also saved as working data, and Markdown is exported on demand.
+  All 8 quality gates are checked deterministically by script (number of items recognized from the image, items on the image, cast neither more nor fewer,
+  people present land on recognized items, no stacking of people on one side, extras say where…). It takes novel-script's script.json and novel-art's art.json to prefill the skeleton.
+  Zero dependencies, zero API key.
+  Use when asked for blocking, opening blocking, ensemble blocking, who sits where, seating plans, staging, or staging for AI short drama.
 allowed-tools:
   - Read
   - Write
@@ -18,18 +18,18 @@ allowed-tools:
   - Glob
 triggers:
   - novel-staging
-  - 站位
-  - 开场站位
-  - 群戏站位
-  - 排座位
-  - 走位
+  - blocking
+  - opening blocking
+  - ensemble blocking
+  - seating plan
+  - staging
   - blocking
   - staging
 metadata:
   license: Apache-2.0
   requires:
     bins:
-      - node          # >= 18，只用标准库，无 npm 依赖
+      - node          # >= 18, standard library only, no npm dependencies
   runtimes:
     - claude-code
     - codex
@@ -37,132 +37,132 @@ metadata:
 
 ## novel-staging
 
-给 AI 短剧的每一场排**开场站位**：这一场一开始，每个出场的人在哪件东西旁、坐还是站、面朝哪。
+Plans the **opening blocking** for every scene of an AI short drama: when this scene begins, where each person who appears is relative to which object, whether sitting or standing, and facing which way.
 
-**为什么要单独排**：短剧的每一段视频是一次独立生成，各段自己决定谁坐哪。群戏里六个人围一张长桌，第一段桌边多出五个没名字的宾客，第三段端酒坐着的人穿着主角的衣服。分镜的走位句一段接一段地交接，可每一场**第一段**的那一句是分镜自己编的，人看不到、改不动。所以在分镜之前，每场先定一份站位，分镜照抄。
+**Why plan it separately**: every video segment of a short drama is an independent generation, and each segment decides for itself who sits where. In an ensemble scene with six people around a long table, the first segment grows five nameless guests at the table, and in the third segment the person seated serving wine is wearing the lead's clothes. The storyboard's blocking sentences are handed from one segment to the next, but the sentence for each scene's **first segment** is invented by the storyboard itself, where people cannot see it or change it. So before the storyboard, each scene gets a blocking plan fixed first, and the storyboard copies it.
 
-| 交付 | 解决什么 |
+| Deliverable | What it solves |
 | --- | --- |
-| 认图结果（每个地点 4–20 件东西） | 站位只落在图上真有的东西旁——提示词里写了、图上没画的高台，人坐上去，每段视频都不一样 |
-| 俯视平面 | 在透视的场景图上「桌子北侧」只是桌子后面一小条，前后深浅说不清；摆平了从上往下看，方位一目了然 |
-| 开场站位（每场） | 谁开场就在、谁后来才进；坐还是站跟着剧本；主位、对立、孤立用位置说出来 |
-| 开场走位句 | 程序按站位写，一字不差交给分镜：「胡二爷坐在第三排坐板上，面朝北；其余座位空着，没有其他人。」 |
-| 能调整的报告 | 人在页面上拖动、改坐站和朝向，改完导出就是新的 staging.json，不用手改 JSON |
+| Image-recognition result (4–20 items per location) | Blocking lands only next to things that really are on the image — a raised platform written in the prompt but not drawn in the image, with someone seated on it, comes out different in every video segment |
+| Top-down plan | On a perspective scene image, "the north side of the table" is only a thin strip behind the table, and front-to-back depth is unclear; laid flat and viewed from above, the compass directions are obvious at a glance |
+| Opening blocking (per scene) | Who is there from the start and who comes in later; sitting or standing follows the script; the head seat, opposition and isolation are said through position |
+| Opening blocking sentence | Written by the program from the blocking, handed to the storyboard word for word: "胡二爷 sits on the third row of bench boards, facing north; the other seats are empty, and there is no one else." |
+| An adjustable report | People are dragged on the page, with sit/stand and facing changed, and exporting afterwards gives a new staging.json, with no hand-editing of JSON |
 
-`{baseDir}` = 本文件所在目录。脚本 `{baseDir}/scripts/novel-staging.mjs`，零依赖，`node` 直接跑。
+`{baseDir}` = the directory this file is in. The script is `{baseDir}/scripts/novel-staging.mjs`, zero dependencies, run directly with `node`.
 
-**边界（不做的事）**：不写分镜、不写剧本、不出图。只管**开场那一刻**——中途谁站起来、走到哪，是分镜的事，分镜从这一刻往后接着写。
+**Boundaries (what it does not do)**: no storyboard, no script, no image generation. It handles only **the opening moment** — who stands up midway and where they walk is the storyboard's business, and the storyboard continues from this moment onward.
 
 ---
 
-### Step 0 — 定输入
+### Step 0 — Settle the input
 
-- **script.json**（novel-script 的产出）——硬前提：有哪几场、每场在哪个地点、谁出场、剧本怎么写的
-- **art.json**（novel-art 的产出）——地点的名字；还没有图时，按它的锚点和主视角提示词推算
-- **outline.json**（novel-outline 的产出）——人物编号对应的名字（C01 → 沈知微）
-- **场景图**——每个地点一张，放在 `images/<地点名>-sheet.png`（novel-art 的设定图版面，主视角在左上）。**最好有**：站位要落在图上真有的东西旁。没有图也能先排，但只是草稿（见 Step 2）
+- **script.json** (output of novel-script) — a hard prerequisite: which scenes there are, which location each is in, who appears, how the script is written
+- **art.json** (output of novel-art) — the locations' names; when there is no image yet, reckon from its anchors and main-view prompts
+- **outline.json** (output of novel-outline) — the names for the character numbers (C01 → 沈知微)
+- **Scene images** — one per location, placed at `images/<location name>-sheet.png` (novel-art's sheet layout, the main view at upper left). **Better to have**: blocking should land next to things that really are on the image. It can be planned without images, but only as a draft (see Step 2)
 
-### Step 1 — seed 骨架
+### Step 1 — Seed the skeleton
 
 ```bash
 node {baseDir}/scripts/novel-staging.mjs seed <script.json> --art <art.json> --outline <outline.json> > <workdir>/staging.json
 ```
 
-确定性搬运：地点（按第一次出现的顺序）、每一场的集号场号、在哪个地点、光照时段、出场人物，每个人一条空的站位。**这些事实不要让模型重新想一遍。** 只要其中几集就加 `--eps 1-3`。
+Deterministic transfer: locations (in order of first appearance), each scene's episode and scene number, which location it is in, lighting time of day, the people who appear, and an empty blocking entry per person. **Do not make the model re-derive these facts.** To do only some episodes, add `--eps 1-3`.
 
-### Step 2 — 认图（每个地点一次）
+### Step 2 — Image recognition (once per location)
 
-每个地点一份任务，能并发就并发。读 `{baseDir}/references/read-pass.md`，照着做：看场景图的主视角，认出人会站在旁边、坐在上面的东西，每件写名字、另一种语言、图上的框（`box`）、平面上的位置（`plan`）、能不能坐（`on`）、是不是圆的（`round`），4–20 件，`readFrom` 写 `picture`。
+One task per location; concurrent where possible. Read `{baseDir}/references/read-pass.md` and follow it: look at the scene image's main view and recognize what people would stand next to or sit on; for each, write the name, the name in another language, its box on the image (`box`), its position on the plan (`plan`), whether it can be sat on (`on`), and whether it is round (`round`); 4–20 items, with `readFrom` set to `picture`.
 
-最重的两条：**图里看不到的不写**（提示词里有、图上没有的一律不写）；**`plan` 按透视推算**，不是照抄 `box`。
+The two heaviest rules: **do not write what cannot be seen in the image** (anything in the prompt but not on the image is never written); **`plan` is reckoned from perspective**, not copied from `box`.
 
-**还没有图**：按 art.json 的锚点和主视角提示词推算，`readFrom` 写 `prompt`、不写 `box`。报告会标出来；图出来以后重新认一遍、核对站位。
+**When there is no image yet**: reckon from art.json's anchors and main-view prompt, write `readFrom` as `prompt`, and write no `box`. The report marks it; once the image exists, recognize again and check the blocking.
 
-### Step 3 — 排站位（每场一次）
+### Step 3 — Plan the blocking (once per scene)
 
-每场一份任务，能并发就并发（同一个地点连着几场的，按顺序排，保持位置连贯）。读 `{baseDir}/references/staging-pass.md`，拿这一场的剧本、出场人物和这个地点认出来的东西，给 `places` 里每个人填：开场在不在（`present`）、在哪件东西（`item`）的哪一侧（`side`）、沿这一侧多远（`along`）、坐还是站（`posture`）、面朝哪（`facing`）；再填群演（`extras` / `extrasWhere`）和一句 `why`。
+One task per scene; concurrent where possible (consecutive scenes in the same location are planned in order, to keep positions continuous). Read `{baseDir}/references/staging-pass.md`, take this scene's script, the people who appear and the items recognized for this location, and fill in each person in `places`: whether they are present at the opening (`present`), at which side (`side`) of which item (`item`), how far along that side (`along`), sitting or standing (`posture`), facing which way (`facing`); then fill in the extras (`extras` / `extrasWhere`) and one `why` sentence.
 
-最重的三条：**后来才进来的人开场不在**；**剧本没写有别人就没有群演**；**只使用认出来的那些东西**。
+The three heaviest rules: **a person who comes in later is not present at the opening**; **if the script does not say anyone else is there, there are no extras**; **use only the items recognized**.
 
-### Step 4 — 校验 ⛔ 不能跳
+### Step 4 — Validate ⛔ do not skip
 
 ```bash
 node {baseDir}/scripts/novel-staging.mjs validate <staging.json> --script <script.json> --art <art.json>
 ```
 
-8 道质量门全是代码：每个地点认了图且 4–20 件、东西的名字不重复且框合法（按图认的必须有 `box`）、每一场的地点都有认图结果、出场人物不多不少（给了 `--script` 还核对跟剧本一致）、每个人都定了在不在场且至少一人在场、在场的人落在认出来的东西上且方位坐站朝向合法、同一侧不叠人、群演人数是整数且写明在哪。
+All 8 quality gates are code: each location has image recognition done and 4–20 items, item names are not duplicated and boxes are valid (those recognized from an image must have a `box`), every scene's location has a recognition result, the cast is neither more nor fewer (with `--script`, it is also checked against the script), every person has been decided present or not and at least one person is present, people present land on recognized items with valid side / posture / facing, no stacking of people on one side, extra counts are integers and say where.
 
-**有违规逐条修，改完重跑，直到通过。**
+**Fix every violation one by one, re-run after each fix, until it passes.**
 
-### Step 5 — 默认交付 HTML 工具报告
+### Step 5 — The default deliverable is the HTML tool report
 
 ```bash
-cd <输出目录>
+cd <output directory>
 node {baseDir}/scripts/novel-staging.mjs render staging.json > staging-report.html
 ```
 
-**默认主交付是 `staging-report.html`，完成后直接给用户报告链接或路径，不要只返回 JSON、Markdown 或一段聊天摘要。** `render` 不指定格式时直接输出 HTML，显式 `--html` 仍然支持。`staging.json` 作为工作数据保存，供校验、再次渲染和后续交接；仅在用户需要文本版时执行 `render staging.json --md > staging.md`。
+**The default main deliverable is `staging-report.html`; when finished, give the user the report link or path directly, and do not return only JSON, Markdown or a chat summary.** When `render` is given no format it outputs HTML directly, and an explicit `--html` is still supported. `staging.json` is saved as working data for validation, re-rendering and later handoff; only when the user wants a text version do you run `render staging.json --md > staging.md`.
 
-`staging-report.html` 双击就能开，每一场一张俯视平面：
+`staging-report.html` opens with a double-click, with one top-down plan per scene:
 
-- **拖动**一个人换位置，松手时落在最近那件东西最近的一侧；拖回下面的托盘就是开场不在，从托盘拖进来就是在场
-- **点一下**一个人，调整坐着／站着、朝向（八个方位）
-- 群演加减、写在哪；开场走位句和这一场的检查跟着实时更新
-- 改动存在浏览器里，刷新不丢；**「导出 JSON」**下载改过的 staging.json
+- **Drag** a person to change position; on release they land on the nearest side of the nearest item; dragging back into the tray below means not present at the opening, and dragging in from the tray means present
+- **Click** a person to adjust sitting / standing and facing (eight compass directions)
+- Add or remove extras, and write where they are; the opening blocking sentence and this scene's checks update in real time
+- Changes are stored in the browser and survive a refresh; **"Export JSON"** downloads the edited staging.json
 
-把导出的文件覆盖回 `staging.json`，**再跑一次 Step 4**。报告界面默认中文，`--lang en` 出英文界面（走位句改用认图时写的另一种语言名字）。图在别处就用 `--images <目录>` 指过去。
+Overwrite staging.json with the exported file, and **run Step 4 once more**. The report UI is Chinese by default, and `--lang en` gives an English UI (the blocking sentences then use the names in the other language that were written during image recognition). If the images are elsewhere, point to them with `--images <directory>`.
 
-用户也可以用一句话要求调整（「把胡二爷挪到船头」）：照 `staging-pass.md`「按一句话调整」改，只动说到的人，再校验。
+The user can also ask for an adjustment in one sentence ("move 胡二爷 to the bow"): change it by "Adjust by one sentence" in `staging-pass.md`, touching only the people mentioned, then validate.
 
-### Step 6 — 交给分镜
+### Step 6 — Hand it to the storyboard
 
 ```bash
-node {baseDir}/scripts/novel-staging.mjs blocking staging.json            # 每场一行：场次 + 开场走位句
-node {baseDir}/scripts/novel-staging.mjs blocking staging.json --lang en  # 英文
+node {baseDir}/scripts/novel-staging.mjs blocking staging.json            # one line per scene: scene + opening blocking sentence
+node {baseDir}/scripts/novel-staging.mjs blocking staging.json --lang en  # English
 ```
 
-分镜写每一场**第一段**的开场走位（novel-storyboard 的 `blocking`）时，照抄这一句；之后各段照旧由上一段的段末走位接下去。
+When the storyboard writes the opening blocking of each scene's **first segment** (novel-storyboard's `blocking`), it copies this sentence; after that, the segments continue as usual from the previous segment's end-of-segment blocking.
 
-先提供 HTML 工具报告链接或路径，再用一句话说清：几个地点（几个按图认的、几个按提示词推算的）、几场、几场有人开场不在、群演多少；没过的门明说。JSON 是配套工作数据，Markdown 不是默认交付项。
+First provide the HTML tool report link or path, then say in one sentence: how many locations (how many recognized from images, how many reckoned from prompts), how many scenes, how many scenes have someone absent at the opening, how many extras; say plainly which gates did not pass. The JSON is companion working data, and Markdown is not a default deliverable.
 
-最终落地：
+Final layout:
 
 ```
-<输出目录>/
-├── staging-report.html            ← 默认主交付，双击打开，拖动调整并导出 JSON
-├── staging.json                   ← 工作数据，供校验、渲染和后续交接
-└── images/                        ← 本 skill 不写这个目录
-    └── <地点名>-sheet.png          ← novel-art 的场景设定图放这儿，认图和报告都使用它
+<output directory>/
+├── staging-report.html            ← default main deliverable, opens with a double-click, drag to adjust and export JSON
+├── staging.json                   ← working data, for validation, rendering and later handoff
+└── images/                        ← this skill does not write this directory
+    └── <location name>-sheet.png   ← put novel-art's scene sheets here; both recognition and the report use them
 ```
 
 ---
 
-## 在管线里的位置
+## Position in the pipeline
 
 ```
-novel-outline    → outline.json （人物名字）
-novel-art        → art.json     （地点 + 场景图）
-novel-script     → script.json  （每一场谁出场、怎么演）
-novel-staging    → staging.json （每一场开场谁在哪）
-novel-storyboard → storyboard.json（每一场第一段的开场走位照抄 staging）
+novel-outline    → outline.json (character names)
+novel-art        → art.json     (locations + scene images)
+novel-script     → script.json  (who appears in each scene, how it is played)
+novel-staging    → staging.json (who is where at the opening of each scene)
+novel-storyboard → storyboard.json (each scene's first-segment opening blocking copies staging)
 ```
 
-seed 吃 script.json，`--art` 给地点名字，`--outline` 给人物名字。novel-storyboard 目前**不自动读** staging.json：使用 `blocking` 命令打出的句子，写进分镜每场第一段的 `blocking`。
+seed takes script.json, `--art` gives the location names, and `--outline` gives the character names. novel-storyboard currently **does not read** staging.json automatically: use the sentences printed by the `blocking` command and write them into the `blocking` of the first segment of each scene in the storyboard.
 
-## 边界
+## Boundaries
 
-- 只排开场那一刻；中途换位置归分镜
-- 本 skill 不出图；场景图是 novel-art 的设定图出完以后放进 `images/`
-- 方位一律按场景说（东南西北、在哪件东西旁），不按画面说（左右）——画面左右由机位推出，机位一换就翻
+- It plans only the opening moment; position changes midway belong to the storyboard
+- This skill does not generate images; scene images are placed in `images/` after novel-art's sheets have been generated
+- Compass directions are always given by the scene (north, east, south, west, next to which item), not by the frame (left and right) — frame left/right is derived from the camera position and flips whenever the camera changes
 
-## 自测
+## Self-test
 
 ```bash
 node {baseDir}/scripts/selftest.mjs
 ```
 
-99 项断言，不调模型、不花额度。8 道质量门每一道都有击穿用例；平面几何、拖动落点、走位句、seed、报告（中英界面、转义、嵌图）都覆盖；还会单独拿嵌进页面的那份算法的源码重建一份，核对跟命令行算的一样。改完脚本先跑这个。
+99 assertions, no model calls, no quota spent. Every one of the 8 quality gates has a test that defeats it; plane geometry, drag landing points, blocking sentences, seed and the report (Chinese and English UI, escaping, embedded images) are all covered; it also separately rebuilds a copy from the source of the algorithm embedded in the page and checks that it computes the same as the command line. Run this first after changing the script.
 
-## 自带样例
+## Bundled sample
 
-`{baseDir}/examples/渡口-staging.json`：《渡口》三个地点（渡口栈桥、渡船船舱、对岸芦苇滩）、九场的开场站位，全部质量门通过（对着样例剧本和美术）。样例没有场景图，三个地点都是按设定提示词推算的（`readFrom: prompt`）。当质量基准，也是自测夹具。
+`{baseDir}/examples/渡口-staging.json`: the opening blocking for nine scenes across three locations of *The Ferry* (《渡口》) (the ferry pier, the ferry cabin, the reed flat on the far bank), with every quality gate passing (against the sample script and art). The sample has no scene images, and all three locations are reckoned from the design prompts (`readFrom: prompt`). It serves as the quality baseline and also as the self-test fixture.

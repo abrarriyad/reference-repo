@@ -1,49 +1,49 @@
-# H3 视频提示词 · 写法规范（内化版）
+# H3 video prompt · writing spec (internalized)
 
-方法论学自 MiniMax-H3 官方提示词指南（I2VA / 多图对齐模式），**内化成本 skill 自带文档——不依赖任何外部 skill**。写每段的 `h3Prompt` 照这份做，结构部分有质量门逐字对账。
+The methodology is learned from the MiniMax-H3 official prompt guide (I2VA / multi-image alignment mode) and **internalized into a document bundled with this skill — depending on no external skill**. Write each segment's `h3Prompt` per this document; the structural parts are audited verbatim by a quality gate.
 
-**正文内容怎么写（一个运镜、动作要做得完、台词逐字、声音分层、不写画风）见 `shot-writing.md`，本文只讲 H3 特有的语法和字段。**
+**For how to write the body content (one camera move, actions must be completable, dialogue verbatim, layered sound, no visual style) see `shot-writing.md`; this document covers only H3's specific syntax and fields.**
 
-## 语言分工
+## Language split
 
-- **默认整条英文**（`promptLang: 'en'`）——官方规范的口径：正文、对齐指令、字段名、镜头标记全英文，禁角色名（用 an old ferryman 这类通用身份）
-- 三样东西保留原文语言（官方规定）：**台词**（`<d>[Chinese] …</d>` 逐字原文，一个标点都不许动，门盯着）、歌词、画面里可见的文字（英文双引号原样引用）
-- `promptLang: 'zh'` 可切整条中文（对齐指令、字段名、镜头标记都有中文版）——偏离官方推荐的备选项，实测中文效果不稳就回英文。**禁角色名这一条不跟着语言变**：它来自官方规范，中文版同样用通用身份
+- **English throughout by default** (`promptLang: 'en'`) — the official spec's position: body, alignment instruction, field names and shot markers all in English, character names banned (use generic identities like an old ferryman)
+- Three things keep the source language (official rule): **dialogue** (`<d>[Chinese] …</d>`, verbatim original, not a single punctuation mark may change, a gate watches it), lyrics, and text visible in the picture (quoted as-is in English double quotes)
+- `promptLang: 'zh'` switches the whole prompt to Chinese (the alignment instruction, field names and shot markers all have Chinese versions) — an alternative to the official recommendation; if Chinese proves unstable in testing, go back to English. **The ban on character names does not change with language**: it comes from the official spec, and Chinese mode likewise uses generic identities
 
-## 结构（validate 逐字对账的部分）
+## Structure (the parts validate audits verbatim)
 
 ```text
 How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 2) aligns with the 3.00-second mark of the target video; ….
-（单分镜的段改用官方 I2VA 固定句：For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.）
+(a single-shot segment instead uses the official I2VA fixed sentence: For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.)
 
 integrated_multimodal_description:
-[Shot 1] 按 <Picture 1> 的构图锚定人物与状态，再写这几秒发生什么、镜头怎么动、谁说了什么（全英文，**不写画风句**——画风由调用方统一附加）。
-[Shot 2] At 00:03.000, the camera cuts to <Picture 2>: ……（**每个镜头独立一行**，切点时刻开头，等于前面分镜秒数的累计）
+[Shot 1] Anchor the characters and states to <Picture 1>'s composition, then write what happens in these seconds, how the camera moves, who says what (all English, **no style sentence** — style is appended uniformly by the caller).
+[Shot 2] At 00:03.000, the camera cuts to <Picture 2>: …… (**one line per shot**, starting with the cut time, equal to the running sum of prior cut seconds)
 
-overall_soundscape: 1–4 句英文：环境声、动作声、非语言人声。不复述台词。
+overall_soundscape: 1–4 English sentences: ambient sound, action sound, non-verbal vocal sound. Do not restate dialogue.
 
-non_diegetic_music: 1–3 句英文写配器与速度（角色听不见、只有观众听得见）。没有就写 N/A。
+non_diegetic_music: 1–3 English sentences on instrumentation and tempo (inaudible to the characters, audible only to the audience). Write N/A if there is none.
 ```
 
-中文模式（promptLang=zh）的对应 token：`参考图与目标视频的对齐——` / `整体视听描述：` / `[镜头 k] 于 00:0X.XXX，`，配乐没有写「无」。
+The Chinese mode (promptLang=zh) corresponding tokens: `参考图与目标视频的对齐——` / `整体视听描述：` / `[镜头 k] 于 00:0X.XXX，`, and "none" for music is written `无`.
 
-首行对齐指令和切点时刻**由分镜秒数推导**，改了秒数忘改提示词，validate 当场拦。
+The first-line alignment instruction and the cut times **are derived from the cut seconds**; change the seconds and forget the prompt, and validate blocks it on the spot.
 
-## 运镜词按语言
+## Camera-move terms follow the language
 
-内容规则（一切一个运镜、写成动作句）见 `shot-writing.md`。H3 特有的是**词的语言**：英文模式用官方词（static shot / push in / tracking shot……），中文模式用词表的中文词（固定/推/拉/跟拍……）——门按 `promptLang` 检查，且**必须落在自己那一行里**。
+The content rule (one camera move per cut, written as an action sentence) is in `shot-writing.md`. What is H3-specific is **the language of the terms**: English mode uses the official terms (static shot / push in / tracking shot …), Chinese mode uses the vocabulary's Chinese terms (固定/推/拉/跟拍 …) — the gate checks per `promptLang`, and the term **must land on its own line**.
 
-## 说话人与台词
+## Speakers and dialogue
 
-- 台词逐字、身份写在台词外面（见 `shot-writing.md`）。H3 特有的是**标记方式**：台词进 `<d>[Chinese] …</d>`，`<d>` 里只放语言标签和台词原文
-- 说话人编号 `(S1)` `(S2)` 全段稳定，第一次出现给足辨识信息（身份、年龄段、音色、语速）；同说不同人用 `(S1,S2)`
-- **画外音**：中文写「以画外音说（唇形完全闭合）」；英文用官方句式 `says in an off-screen voiceover … while their lips remain completely closed`
-- 画面里真实可见的文字（招牌、字条）用英文双引号原样引用，不翻译
+- Dialogue verbatim, identity written outside the dialogue (see `shot-writing.md`). What is H3-specific is **the marking**: dialogue goes into `<d>[Chinese] …</d>`, and `<d>` holds only the language tag and the dialogue text
+- Speaker numbering `(S1)` `(S2)` stays stable across the segment; on first appearance give enough identifying information (identity, age range, timbre, pace); for two speakers at once use `(S1,S2)`
+- **Voice-over**: Chinese writes "以画外音说（唇形完全闭合）"; English uses the official phrasing `says in an off-screen voiceover … while their lips remain completely closed`
+- Text genuinely visible in the picture (signboards, notes) is quoted as-is in English double quotes, not translated
 
-## 声音字段名
+## The sound field names
 
-三层怎么分见 `shot-writing.md`。落到 H3 的字段：台词、歌声、剧内音乐 → `integrated_multimodal_description` 的镜头行；环境与动作声 → `overall_soundscape`；配乐 → `non_diegetic_music`（没有写 `N/A`，中文模式写「无」）。
+For how the three layers split see `shot-writing.md`. Landing in H3's fields: dialogue, singing and in-world music → the shot line of `integrated_multimodal_description`; ambient and action sound → `overall_soundscape`; score → `non_diegetic_music` (write `N/A` if none; Chinese mode writes `无`).
 
-## 关键帧在 H3 里怎么引用
+## How keyframes are referenced in H3
 
-主分镜图（f1）钉 0.00 秒，是这一段世界观的完全参照；每个 `[Shot k]` 先写 `<Picture k>` 锚定这一切的构图与人物状态，再写动作展开。动作能不能做完、人物此刻在哪要和图一致，见 `shot-writing.md`。
+The master frame (f1) is pinned at 0.00s and is the complete reference for this segment's world; each `[Shot k]` first writes `<Picture k>` to anchor this cut's composition and character states, then writes the action unfolding. Whether the action can be completed, and where the character is at this moment, must match the image; see `shot-writing.md`.

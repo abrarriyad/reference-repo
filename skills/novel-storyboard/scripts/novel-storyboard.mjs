@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// novel-storyboard — deterministic helpers for the novel-storyboard skill (分镜).
+// novel-storyboard — deterministic helpers for the novel-storyboard skill (storyboarding).
 // Zero dependencies on purpose: the skill must work in any directory
 // without an npm install. Node 18+ (stdlib only).
 
@@ -8,34 +8,35 @@ import { basename, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /* ------------------------------------------------------------------ */
-/* 常量                                                                */
+/* constants                                                           */
 /* ------------------------------------------------------------------ */
 /*
- * AI 短剧的前提刻在骨子里，三层结构也由此而来：
+ * The premise of AI short drama is burned in, and the three-level structure follows from it:
  *
- *   段（segment）＝ 一次视频生成调用，上限就是模型单段时长（默认 15 秒）
- *   分镜（cut）  ＝ 段内的一次剪切，2–5 秒——短剧观众的注意力节奏
- *   分镜图       ＝ 每个分镜一张关键帧：第 1 个分镜的是主分镜图（钉在
- *                  0.00 秒），其余是子分镜图（各钉在自己的切点时刻）
+ *   segment = one video generation call, capped at the model's single-segment duration (15s by default)
+ *   cut     = one edit inside the segment, 2–5s — the short-drama audience's attention rhythm
+ *   frame   = one keyframe per cut: the first cut's is the master frame (pinned at
+ *             0.00s), the rest are sub-frames (each pinned at its own cut mark)
  *
- * 一段的画面由这串分镜图 + 一条 H3 提示词共同控制：多图对齐指令
- * 把每张图钉在对应秒数上，[Shot k] 的切点时刻和分镜秒数逐一对账。
- * 多切一刀的成本几乎为零，所以不心疼分镜数量，只守节奏。
+ * A segment's picture is controlled jointly by this run of frames + one H3 prompt: the multi-image
+ * alignment instruction pins each image at its second, and each [Shot k] cut time is audited against
+ * the cut seconds. One more cut costs almost nothing, so the number of cuts is not precious — only
+ * the rhythm is.
  */
 
 export const DEFAULT_PARAMS = {
-  maxSegmentSeconds: 15, // 视频模型单段生成上限（秒）
-  minCutSeconds: 2,      // 单个分镜下限
-  maxCutSeconds: 5,      // 单个分镜上限——3 秒左右是短剧的呼吸
-  maxOnScreen: 3,        // 单个分镜同框人数上限，超了必须带拆解说明
-  tolerance: 0.15,       // 每集总时长对剧本目标的容差
+  maxSegmentSeconds: 15, // video-model single-segment cap (seconds)
+  minCutSeconds: 2,      // single cut lower bound
+  maxCutSeconds: 5,      // single cut upper bound — around 3s is the breathing of short drama
+  maxOnScreen: 3,        // cap on people in frame per cut; beyond it a breakdown note is required
+  tolerance: 0.15,       // tolerance of each episode's total duration against the script target
 };
 
 export function paramsOf(doc) {
   return { ...DEFAULT_PARAMS, ...(doc?.params ?? {}) };
 }
 
-/** 景别枚举：中文词必须出现在该分镜的分镜图提示词里（分镜图提示词是中文）。 */
+/** Shot-size enum: the Chinese word must appear in this cut's frame prompt (frame prompts are in Chinese). */
 export const SHOT_SIZES = {
   'extreme-wide': { zh: '大远景', phrase: 'extreme wide shot' },
   wide: { zh: '全景', phrase: 'wide shot' },
@@ -44,7 +45,7 @@ export const SHOT_SIZES = {
   'extreme-close': { zh: '大特写', phrase: 'extreme close-up' },
 };
 
-/** 运镜枚举：直接用 H3 官方词表，原样写进该分镜的 [Shot k] 段落。 */
+/** Camera-move enum: use the official H3 vocabulary directly, written as-is into this cut's [Shot k] passage. */
 export const CAMERA_MOVES = {
   'Static Shot': '固定',
   'Push In': '推',
@@ -68,12 +69,13 @@ export const CAMERA_MOVES = {
   'Roll Counterclockwise': '逆旋',
 };
 
-/** 稳定性枚举：跟运镜是两件事——固定机位也可以微晃。 */
+/** Stability enum: a separate matter from the camera move — a locked-off camera can still shake slightly. */
 export const STABILITY = { stable: '稳定', 'slight-shake': '微晃', handheld: '手持' };
 
 /**
- * 构图量化字段（每镜必填）。纯参考图出片时没有分镜图替正文说清
- * 「多近、谁在哪、眼睛看哪」，这些信息要么写成字，要么就地消失。
+ * Composition quantified fields (required per shot). With reference-only generation there is no frame
+ * to say plainly for the body "how close, who is where, where the eyes look", so this information must
+ * either be written down or simply vanish.
  */
 export const COMPOSITION_FIELDS = ['lens', 'cameraPosition', 'composition', 'eyeline', 'focus', 'stability'];
 
@@ -81,18 +83,19 @@ const CJK = /[㐀-鿿぀-ヿ가-힯]/;
 const r1 = (n) => Math.round(n * 10) / 10;
 
 /* ------------------------------------------------------------------ */
-/* H3 提示词的确定性骨架                                                 */
+/* deterministic skeleton of the H3 prompt                            */
 /* ------------------------------------------------------------------ */
 /*
- * 结构由 H3 官方规范（h3-prompt-writing skill）定死，而且对齐指令和
- * 切点时刻都能从分镜结构推导出来——所以逐字设门，一个字符都不许漂。
+ * The structure is fixed by the official H3 spec (the h3-prompt-writing skill), and both the
+ * alignment instruction and the cut times can be derived from the cut structure — so they are
+ * gated verbatim, and not one character may drift.
  */
 
 export const H3_I2VA_LINE =
   'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.';
 export const H3_FIELDS = ['integrated_multimodal_description:', 'overall_soundscape:', 'non_diegetic_music:'];
 
-/** 骨架 token 按语言取：默认英文（官方规范口径）；'zh' 整条中文（只保留 <d>[Chinese] 和 (S1) 两个模型级 token）。 */
+/** Skeleton tokens by language: English by default (the official spec's position); 'zh' is Chinese throughout (keeping only two model-level tokens, <d>[Chinese] and (S1)). */
 export const H3_TOKENS = {
   zh: {
     i2va: '目标视频在 0.00 秒处完全参照图 1（来自镜头 1）。',
@@ -114,7 +117,7 @@ export const H3_TOKENS = {
   },
 };
 
-/** 段内切点时刻表：[0, c1, c1+c2, …]（不含结尾）。 */
+/** Cut-time table within a segment: [0, c1, c1+c2, …] (excluding the end). */
 export function cutStarts(cuts) {
   const starts = [];
   let t = 0;
@@ -125,7 +128,7 @@ export function cutStarts(cuts) {
   return starts;
 }
 
-/** [Shot k] 的切点时刻格式：00:03.000（分:秒.毫秒）。 */
+/** [Shot k] cut-time format: 00:03.000 (minutes:seconds.milliseconds). */
 export function h3CutTime(t) {
   const m = Math.floor(t / 60);
   const s = Math.floor(t % 60);
@@ -134,8 +137,9 @@ export function h3CutTime(t) {
 }
 
 /**
- * 首行对齐指令：单分镜的段用 I2VA 固定句式；多分镜的段把每张分镜图
- * 钉在自己的切点秒数上。整行由分镜结构推导，validate 逐字对账。
+ * The first-line alignment instruction: a single-cut segment uses the fixed I2VA phrasing; a
+ * multi-cut segment pins each frame at its own cut second. The whole line is derived from the cut
+ * structure, and validate audits it verbatim.
  */
 export function h3AlignmentLine(cuts, lang = 'en') {
   const tk = H3_TOKENS[lang] ?? H3_TOKENS.zh;
@@ -145,14 +149,14 @@ export function h3AlignmentLine(cuts, lang = 'en') {
   return `${tk.alignHead}${parts.join(lang === 'en' ? '; ' : '；')}${tk.alignTail}`;
 }
 
-/** 台词/画面文字之外的部分——H3 要求它全英文，人名也只许出现在 <d> 里。 */
+/** Everything outside dialogue / on-screen text — H3 requires it to be all English, and names are only allowed inside <d>. */
 export function h3Remainder(prompt) {
   return String(prompt ?? '')
     .replace(/<d>[\s\S]*?<\/d>/g, ' ')
     .replace(/"[^"\n]*"/g, ' ');
 }
 
-/** 把 h3Prompt 的描述正文按 [镜头 k] / [Shot k] 切成每个分镜自己的段落。 */
+/** Slice the description body of h3Prompt by [镜头 k] / [Shot k] into each cut's own passage. */
 export function h3CutSlices(prompt, cutCount, lang = 'en') {
   const tk = H3_TOKENS[lang] ?? H3_TOKENS.zh;
   const h3 = String(prompt ?? '');
@@ -174,20 +178,21 @@ export function h3CutSlices(prompt, cutCount, lang = 'en') {
 }
 
 /* ------------------------------------------------------------------ */
-/* Seedance 提示词：程序按官方结构拼                                       */
+/* Seedance prompt: assembled by the program per the official structure    */
 /* ------------------------------------------------------------------ */
 /*
- * 写法见 references/seedance-prompt.md。模型只写每一切的镜头正文（cut.shot），
- * 其余全由这里拼：参考图声明、段级走位、逐镜量化字段、台词 {}、音效 <>、
- * 配乐（）、编号约束。时间层用镜头顺序表达，不写秒数——官方说精确时间不稳定。
- * 画风层（视觉风格）不在这里：它由调用方在提交时附加。
+ * For how to write it see references/seedance-prompt.md. The model writes only each cut's shot body
+ * (cut.shot); everything else is assembled here: reference-image declarations, segment-level blocking,
+ * per-shot quantified fields, dialogue {}, sound effects <>, music （）, numbering constraints. The
+ * temporal layer is expressed by shot order without seconds — the official docs say precise timing is
+ * unstable. The style layer (visual style) is not here: the caller appends it at submission time.
  */
 
-// 运镜行用完整的中文说法；词表里本来就完整的原样用
+// Camera-move lines use the full Chinese phrasing; entries that are already complete in the vocabulary are used as-is
 const SEEDANCE_CAMERA = { 'Static Shot': '固定镜头', 'Push In': '推镜', 'Pull Out': '拉镜' };
 export const seedanceCamera = (camera) => SEEDANCE_CAMERA[camera] ?? CAMERA_MOVES[camera] ?? '';
 
-/** 镜头正文里不许出现的东西：这些由程序按真实结构加，正文写了就会重复或错位。 */
+/** Things that must not appear in the shot body: the program adds these from the real structure, and writing them duplicates or misplaces them. */
 export const SEEDANCE_FORBIDDEN = [
   [/\d+(?:\.\d+)?\s*(?:[–\-~至到]\s*\d+(?:\.\d+)?\s*)?秒|\d{1,2}:\d{2}/, '时间'],
   [/【镜头|镜头\s*\d/, '镜头编号'],
@@ -199,14 +204,15 @@ export const SEEDANCE_NO_SUBTITLES = '保持无字幕，避免生成任何文字
 export const SEEDANCE_NO_TWINS = '视频全程禁止出现外形、着装、配饰完全一致的人物';
 
 /**
- * 附件两条路：这一段每切都有分镜图 → 分镜路径，只挂分镜图；否则 → 参考图路径，
- * 挂场景、人物、道具的设定图，已有的分镜图接在后面并在对应镜头注明构图参考。
- * 越需要精准参考的越靠前：场景 → 人物 → 道具 → 分镜图。
+ * Two attachment routes: if every cut in this segment has a frame → the frame route, attaching only
+ * frames; otherwise → the reference route, attaching the scene, character and prop sheets, with any
+ * frames that exist appended after them and a composition reference noted on the matching shot.
+ * The order runs from most to least in need of precise reference: scene → characters → props → frames.
  *
- * @param scene  expandScript 展开后的那一场（取台词原文）；没有剧本时台词行写 {}
- * @param names  { scene(id), char(id), prop(id) } → 显示名
- * @param image  (kind, rel) → src|null，与报告同一个定位函数，判断分镜图在不在
- * @param constraints 调用方的全局约束，逐条拼进【约束】
+ * @param scene  the scene after expandScript (for the verbatim dialogue); the dialogue line writes {} when there is no script
+ * @param names  { scene(id), char(id), prop(id) } → display name
+ * @param image  (kind, rel) → src|null, the same locator as the report, to tell whether a frame exists
+ * @param constraints the caller's global constraints, each spliced into 【约束】
  * @returns {{ prompt: string, refs: {kind, label, file}[] }}
  */
 export function seedancePrompt(seg, { scene = null, names = {}, image = null, constraints = [] } = {}) {
@@ -237,7 +243,7 @@ export function seedancePrompt(seg, { scene = null, names = {}, image = null, co
   if (blocking) out.push('【人物关系与构图逻辑】', blocking, '');
 
   cuts.forEach((cut, ci) => {
-    // 每一行只在有内容时出现；台词行例外——没有台词也写 {}，告诉模型这一镜不说话
+    // Each line appears only when it has content; the dialogue line is the exception — write {} even with no dialogue, telling the model this shot says nothing
     const line = (k, v) => {
       const text = String(v ?? '').trim();
       if (text) out.push(`${k}：${text}`);
@@ -256,7 +262,7 @@ export function seedancePrompt(seg, { scene = null, names = {}, image = null, co
     const spoken = scene && Number.isInteger(from) && Number.isInteger(to)
       ? scene.beats.slice(from - 1, to).filter((b) => b.kind === 'line')
       : [];
-    // 台词逐字进 {}；身份与语气由镜头正文交代，画外音按官方写法标在 {} 外面
+    // Dialogue goes verbatim into {}; identity and tone are carried by the shot body, and voice-over is marked outside {} per the official phrasing
     out.push(`台词：${spoken.length ? spoken.map((b) => `${b.speaker === 'VO' ? '以画外音说' : ''}{${b.text}}`).join(' ') : '{}'}`);
     line('视线落点', cut?.eyeline);
     line('焦点', cut?.focus);
@@ -271,7 +277,7 @@ export function seedancePrompt(seg, { scene = null, names = {}, image = null, co
   if (music) out.push(`（${music}）`);
   if (soundscape || music) out.push('');
 
-  // 本管线不要字幕；同段多人同框时禁双胞胎——官方已知坑，放进约束末尾
+  // This pipeline does not want subtitles; with several people in frame in the same segment, ban twins — a known official pitfall, put at the end of the constraints
   const rules = [...constraints.map((c) => String(c).trim()).filter(Boolean)];
   if (!rules.includes(SEEDANCE_NO_SUBTITLES)) rules.push(SEEDANCE_NO_SUBTITLES);
   const crowded = cuts.some((c) => (c?.characters ?? []).filter((id) => id !== 'VO').length >= 2);
@@ -281,18 +287,18 @@ export function seedancePrompt(seg, { scene = null, names = {}, image = null, co
 }
 
 /* ------------------------------------------------------------------ */
-/* 剧本节拍展开                                                          */
+/* script beat expansion                                                */
 /* ------------------------------------------------------------------ */
 /*
- * 与 novel-script 相同的计秒规则，这里刻意重新实现而不是跨目录
- * import——每个 skill 必须自包含、可以单独拷走。参数从 script.json
- * 的 params 里读，两边天然一致。
+ * The same timing rule as novel-script, deliberately reimplemented here rather than imported across
+ * directories — every skill must be self-contained and copyable on its own. The parameters are read
+ * from script.json's params, so the two stay naturally in step.
  */
 
 const SCRIPT_DEFAULTS = { charsPerSecond: 4.5, actionSeconds: 2.5 };
 const lineChars = (line) => String(line ?? '').replace(/\s+/g, '').length;
 
-/** 把 script.json 展开成分镜要认领的节拍清单：ep → scenes → beats。 */
+/** Expand script.json into the beat list the storyboard claims: ep → scenes → beats. */
 export function expandScript(script) {
   const p = { ...SCRIPT_DEFAULTS, ...(script?.params ?? {}) };
   const eps = new Map();
@@ -323,23 +329,25 @@ export function expandScript(script) {
 export const segSeconds = (segment) => r1((segment?.cuts ?? []).reduce((n, c) => n + (c?.seconds ?? 0), 0));
 
 /* ------------------------------------------------------------------ */
-/* 镜头配方卡库（可选挂载）                                               */
+/* shot recipe card library (optional mount)                            */
 /* ------------------------------------------------------------------ */
 /*
- * shot-recipes 是可选挂载的卡库：给了 --shots <卡片目录> 才有 shot-recipe
- * 这道门。两个 skill 必须各自独立、谁没有谁都能跑，所以这里刻意不
- * import shot-recipes.mjs，自己写一份受限 frontmatter 解析——与
- * expandScript 同一个先例（跨目录 import 会让 skill 拷不走）。
+ * shot-recipes is an optionally mounted card library: the shot-recipe gate exists only when
+ * --shots <cards dir> is given. The two skills must stay independent and each must run without the
+ * other, so this deliberately does not import shot-recipes.mjs and writes its own restricted
+ * frontmatter parser — the same precedent as expandScript (a cross-directory import would make the
+ * skill uncopyable).
  *
- * 只取门要用的机器字段，正文一概不读；语法受限到只认 `key: 标量` 与
- * `key: [a, b, c]` 行内数组——受限就没有歧义，25 行足够。卡片格式的合法性
- * 由 shot-recipes 自己的 lint 负责，这边只管读得懂的部分。
+ * Only the machine fields the gate needs are read; the body is never read. The syntax is restricted
+ * to `key: scalar` and `key: [a, b, c]` inline arrays — restricted means unambiguous, and 25 lines
+ * is enough. The validity of the card format is shot-recipes' own lint's job; this side only reads
+ * what it understands.
  */
 
 const RECIPE_FIELDS = new Set(['id', 'name', 'name_en', 'cuts', 'must_phrases', 'sizes', 'cameras']);
 const unquote = (s) => String(s).replace(/^['"](.*)['"]$/, '$1').trim();
 
-/** 受限 frontmatter 解析：只回机器字段，没有 id 就当不是卡片。 */
+/** Restricted frontmatter parser: returns machine fields only, and anything without an id is not a card. */
 export function parseCardFields(text) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(text ?? ''));
   if (!m) return null;
@@ -360,7 +368,7 @@ export function parseCardFields(text) {
   return card.id ? card : null;
 }
 
-/** 读卡片目录 → Map<id, 机器字段>。只吃顶层 .md（en/ 是正文翻译，机器字段只有一份）。 */
+/** Read a card directory → Map<id, machine fields>. Takes top-level .md only (en/ holds translated bodies; the machine fields exist only once). */
 export function loadRecipes(dir) {
   const root = resolve(dir);
   const cards = new Map();
@@ -373,12 +381,15 @@ export function loadRecipes(dir) {
 }
 
 /*
- * 建议景别 / 运镜**刻意不设门**，只在报告里提示偏离，理由三条：
- *   1. 配方是语汇不是法条——同一张卡在竖屏与横屏、两人与三人、有台词
- *      与无台词的情况下，景别会合理偏移（卡库那边把它们存成集合而不是
- *      序列，就是从结构上杜绝升级成硬门）
- *   2. 可选挂载的东西一旦变严就没人挂——挂了反而被拦，下次就不挂了
- *   3. 仓库已有明文判例：误拦的门比没有门更糟，门的信用比数量重要
+ * Suggested shot size / camera move are **deliberately not gated**, and deviations are only flagged in
+ * the report, for three reasons:
+ *   1. A recipe is vocabulary, not law — the same card legitimately shifts shot size between portrait
+ *      and landscape, two and three people, with and without dialogue (the card library stores them as
+ *      sets rather than sequences, which structurally rules out promoting them to a hard gate)
+ *   2. An optional mount that turns strict is one nobody mounts — mount it and get blocked, and the next
+ *      run leaves it off
+ *   3. The repo already has an explicit precedent: a gate that blocks wrongly is worse than no gate;
+ *      a gate's credibility matters more than its count
  */
 export function recipeDrift(cut, card) {
   const sizes = Array.isArray(card?.sizes) ? card.sizes : [];
@@ -390,23 +401,24 @@ export function recipeDrift(cut, card) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 门失败累积                                                           */
+/* gate failure accumulation                                            */
 /* ------------------------------------------------------------------ */
 /*
- * 每次 validate / checkup 的结果本来跑完就没了，于是「模型最常违反哪条规则」
- * 只能靠印象。这里把每次运行与每条失败追加到工作目录的 .gates.jsonl，
- * stats 子命令再读回来，回答三个问题：
- *   哪道门最常响   → 那条规则模型最常无视，措辞该改
- *   哪道门从没响过 → 可能是死门，或者规则已经被模型内化了
- *   失败详情长什么样 → 反复出现却没有门的那类问题，只能靠人看这些自由文本
+ * The result of each validate / checkup used to vanish on completion, so "which rule does the model
+ * violate most" could only be answered from impressions. This appends each run and each failure to
+ * .gates.jsonl in the working directory, and the stats subcommand reads it back to answer three
+ * questions:
+ *   which gate fires most   → that is the rule the model most often ignores; the wording is what should change
+ *   which gate never fires  → possibly a dead gate, or a rule already internalized by the model
+ *   what failures look like → the class of problem that recurs without a gate can only be found by a human reading this free text
  *
- * 刻意做成纯函数 + CLI 负责 IO：自测不落盘也能验。
- * 写不进去就静默跳过——日志是附加价值，不能让它挡住主流程。
+ * Deliberately pure functions with IO in the CLI: the self-test can verify without writing to disk.
+ * If it cannot be written, skip silently — the log is a bonus and must not block the main flow.
  */
 
 export const GATE_LOG = '.gates.jsonl';
 
-/** 一次运行产生的日志行（对象数组，CLI 负责序列化落盘）。 */
+/** The log rows one run produces (an array of objects; the CLI serialises them to disk). */
 export function gateLogEntries(gates, { doc = '', at = '' } = {}) {
   const list = Array.isArray(gates) ? gates : [];
   if (!list.length) return [];
@@ -418,7 +430,7 @@ export function gateLogEntries(gates, { doc = '', at = '' } = {}) {
   return rows;
 }
 
-/** 汇总日志行。allGates 给全量门 id，用来找出「从没响过」的那些。 */
+/** Summarise log rows. allGates supplies the full set of gate ids, used to find the ones that never fired. */
 export function summarizeGateLog(entries, allGates = []) {
   const rows = (Array.isArray(entries) ? entries : []).filter((e) => e && typeof e === 'object');
   const runs = rows.filter((e) => e.kind === 'run');
@@ -445,7 +457,7 @@ export function summarizeGateLog(entries, allGates = []) {
 /* stats                                                               */
 /* ------------------------------------------------------------------ */
 
-/** 报告与质量门共用的确定性统计。script 是硬前提——分镜离开剧本没有意义。 */
+/** Deterministic stats shared by the report and the quality gates. script is a hard prerequisite — a storyboard without a script is meaningless. */
 export function computeStats(board, script) {
   const params = paramsOf(board);
   const expanded = expandScript(script);
@@ -536,14 +548,14 @@ export function gateReport(board, ctx = {}) {
     id: [], size: [], camera: [], frame: [], names: [], refs: [],
     h3s: [], h3d: [], h3e: [], recipe: [], comp: [], sd: [],
   };
-  // 配方卡库是可选挂载：ctx.recipes 为空就整门跳过（不是「没有 cut 带 recipe」就跳过）
+  // The recipe card library is an optional mount: when ctx.recipes is empty the whole gate is skipped (not "no cut carries a recipe")
   const recipes = ctx.recipes ?? null;
   let recipeRefs = 0;
-  // 提示词语言：默认英文——官方规范的口径（台词仍在 <d> 里保留原文）；'zh' 可切整条中文
+  // Prompt language: English by default — the official spec's position (dialogue still keeps its original text inside <d>); 'zh' switches to Chinese throughout
   const promptLang = board?.promptLang ?? 'en';
 
-  // 视频提示词禁人名：outline 的名字 + cast 的名字与别名。这是 H3 与 Seedance 官方规范的要求，
-  // 不跟着语言变；分镜图提示词反过来直呼其名——名字指向挂上去的那张设定图
+  // No character names in video prompts: names from outline + names and aliases from cast. This is a requirement of both the H3 and Seedance official specs,
+  // and does not change with language; the frame prompt is the opposite and names characters directly — the name points at the attached sheet
   const banned = [];
   for (const c of ctx.outline?.characters ?? []) if (c?.name) banned.push(c.name);
   for (const c of ctx.cast?.characters ?? []) {
@@ -601,7 +613,7 @@ export function gateReport(board, ctx = {}) {
         if (rest.includes(name)) bad.names.push(`${sid} 的 h3Prompt 在台词之外出现角色名「${name}」`);
       }
 
-      // 段级：走位是整段的空间地基；Seedance 的音效与配乐由程序套符号，字段里不许自带
+      // Segment level: blocking is the whole segment's spatial foundation; Seedance's sound effects and music get their symbols from the program, so fields must not carry them
       if (!String(seg?.blocking ?? '').trim()) bad.comp.push(`${sid} 缺 blocking（人物关系与构图逻辑）`);
       if (/[<>]/.test(String(seg?.soundscape ?? ''))) bad.sd.push(`${sid} 的 soundscape 自带了 <>——程序会套`);
       if (/[（）()]/.test(String(seg?.music ?? ''))) bad.sd.push(`${sid} 的 music 自带了括号——程序会套（）`);
@@ -643,12 +655,12 @@ export function gateReport(board, ctx = {}) {
         if (!frame.trim()) bad.frame.push(`${cid} 的分镜图提示词为空`);
         else if (!CJK.test(frame)) bad.frame.push(`${cid} 的分镜图提示词不是中文`);
 
-        // 构图量化字段：每镜六项齐全，稳定性在枚举里
+        // Composition quantified fields: all six present per shot, and stability inside the enum
         const missing = COMPOSITION_FIELDS.filter((f) => !String(cut?.[f] ?? '').trim());
         if (missing.length) bad.comp.push(`${cid} 缺 ${missing.join(' / ')}`);
         else if (!STABILITY[cut.stability]) bad.comp.push(`${cid} 的 stability「${cut.stability}」不在枚举里（${Object.keys(STABILITY).join(' / ')}）`);
 
-        // Seedance 镜头正文：中文、非空、通用身份，不写程序会加的东西
+        // Seedance shot body: Chinese, non-empty, generic identity, without the things the program adds
         const shot = String(cut?.shot ?? '');
         if (!shot.trim()) bad.sd.push(`${cid} 缺 shot（Seedance 镜头正文）`);
         else {
@@ -678,7 +690,7 @@ export function gateReport(board, ctx = {}) {
           }
         }
 
-        // 引用对账 + 台词装得下 + 台词逐字进 <d>
+        // Reference audit + dialogue fits + dialogue verbatim inside <d>
         if (scene) {
           const cast = new Set(scene.characters);
           for (const c of cut?.characters ?? []) {
@@ -702,8 +714,8 @@ export function gateReport(board, ctx = {}) {
         }
       });
 
-      // 多格配方靠「连续同 id 的 run」表达（不引入新结构）：卡片 cuts 下限 ≥ 2 时，
-      // 连续段的长度不得小于该下限——单独挂一格的两格配方是没兑现的配方
+      // A multi-cut recipe is expressed as "a run of consecutive cuts sharing the id" (no new structure): when the card's cuts lower bound ≥ 2,
+      // the run length must not fall below that bound — a two-cut recipe mounted on a single cut is a recipe not delivered
       if (recipes) {
         for (let i = 0; i < cuts.length; ) {
           const rid = cuts[i]?.recipe;
@@ -724,7 +736,7 @@ export function gateReport(board, ctx = {}) {
       }
     }
 
-    // 节拍全覆盖：每场的节拍被恰好一次、按顺序、连续认领（分镜级）
+    // Full beat coverage: every scene's beats claimed exactly once, in order and contiguously (at cut level)
     if (sEp) {
       for (const scene of sEp.scenes) {
         const claims = [];
@@ -754,7 +766,7 @@ export function gateReport(board, ctx = {}) {
         }
       }
 
-      // 每集总时长对齐剧本目标
+      // Each episode's total duration aligned with the script target
       if (sEp.targetSeconds > 0) {
         const total = (ep?.segments ?? []).reduce((n, s) => n + segSeconds(s), 0);
         const lo = sEp.targetSeconds * (1 - params.tolerance);
@@ -787,7 +799,7 @@ export function gateReport(board, ctx = {}) {
   add('composition', '构图量化字段齐全（每段 blocking；每镜焦距／机位／构图／视线落点／焦点／稳定性）', eps.length > 0 && bad.comp.length === 0, bad.comp.join('；'));
   add('seedance-shot', 'Seedance 镜头正文中文非空，不写时间、镜头编号、图片引用和协议符号', eps.length > 0 && bad.sd.length === 0, bad.sd.join('；'));
   add('refs', '场次／人物／道具对账剧本', bad.refs.length === 0, script ? bad.refs.join('；') : SKIP_SCRIPT);
-  // 可选挂载的门放最后：没给 --shots 就跳过；给了但全篇没引用配方也算通过，但要明说，不静默
+  // Optional-mount gates go last: skipped without --shots; with --shots but no recipe referenced anywhere it still passes, but must say so, not stay silent
   add(
     'shot-recipe',
     '引用的配方存在、必备短语进了分镜图提示词、多格配方连排够格数',
@@ -852,7 +864,7 @@ export function validateStoryboard(board, ctx = {}) {
 }
 
 /* ------------------------------------------------------------------ */
-/* seed — 从 script.json 确定性预填                                      */
+/* seed — deterministic prefill from script.json                        */
 /* ------------------------------------------------------------------ */
 
 export function seedFromScript(script, epRange = null, aspectRatio = '16:9') {
@@ -887,22 +899,24 @@ export function seedFromScript(script, epRange = null, aspectRatio = '16:9') {
 }
 
 /* ------------------------------------------------------------------ */
-/* export — 投产包（H3 / Seedance 二选一）                                */
+/* export — production pack (H3 or Seedance)                            */
 /* ------------------------------------------------------------------ */
 /*
- * 固定投产结构：每段一个文件夹，提示词就躺在图旁边，整个文件夹就是一次生成。
+ * Fixed production structure: one folder per segment, with the prompt lying next to the images, so
+ * the whole folder is one generation.
  *
- * - H3：E01-01/f1.png … fN.png + prompt.md（h3Prompt 原样），根部 manifest.json
- *   按 Picture 序列出该段要挂的分镜图、秒数、缺图标注
- * - Seedance：E01-01/seedance.md（程序拼的提示词）+ 附件，根部 seedance-manifest.json
- *   按 @图片 编号列出每个附件——分镜图就是包里的 f<k>.png，设定图拷成 ref-<n>.png
+ * - H3: E01-01/f1.png … fN.png + prompt.md (h3Prompt as-is), with manifest.json at the root listing,
+ *   in Picture order, the frames to attach for that segment, their seconds, and missing-image marks
+ * - Seedance: E01-01/seedance.md (the program-assembled prompt) + attachments, with
+ *   seedance-manifest.json at the root listing each attachment by @图片 number — frames are the
+ *   pack's own f<k>.png, and sheets are copied in as ref-<n>.png
  *
- * 纯函数返回文件清单与要拷的设定图，落盘在 CLI 层——可测性。
+ * Pure function returning the file list and the sheets to copy, with disk IO in the CLI — testability.
  *
- * @param opts.protocol     'h3'（默认）| 'seedance'
- * @param opts.imageExists  包内相对路径 → 是否已有（分镜图）
- * @param opts.sheetExists  设定图文件名 → 是否找得到（Seedance 参考图路径用）
- * @param opts.names        { scene, char, prop } → 显示名；opts.constraints 全局约束
+ * @param opts.protocol     'h3' (default) | 'seedance'
+ * @param opts.imageExists  in-pack relative path → whether it already exists (a frame)
+ * @param opts.sheetExists  sheet filename → whether it can be found (used for Seedance reference paths)
+ * @param opts.names        { scene, char, prop } → display name; opts.constraints are global constraints
  */
 export function exportPack(
   board,
@@ -937,8 +951,8 @@ export function exportPack(
         manifest.push({ segment: seg.id, seconds: segSeconds(seg), cuts: (seg.cuts ?? []).length, prompt: `${prefix}${seg.id}/seedance.md`, attachments, missing });
         continue;
       }
-      // prompt.md 头部先说清哪个文件是首帧、每张图钉在第几秒——
-      // 分隔线以下是 h3Prompt 原样，整段复制就能用
+      // The prompt.md header states first which file is the first frame and which second each image pins —
+      // below the separator is h3Prompt as-is, ready to copy as a whole
       const starts = cutStarts(seg.cuts);
       const mapping = (seg.cuts ?? [])
         .map((_, i) => `- Picture ${i + 1} = f${i + 1}.png${i === 0 ? '（**首帧**，钉 0.00 秒）' : `（钉 ${starts[i].toFixed(2)} 秒）`}`)
@@ -977,18 +991,22 @@ export function slug(name) {
 }
 
 /* ------------------------------------------------------------------ */
-/* render — 界面文案                                                    */
+/* render — UI strings                                                 */
 /* ------------------------------------------------------------------ */
 
 /*
- * 界面文案表：内置 zh / en 两套。语言优先级 --lang > JSON 顶层 lang 字段 > 'zh'，
- * 经 ctx.lang 传给渲染器。只管报告界面标签——与 promptLang（H3 提示词语言）
- * 互相独立：界面切英文不改提示词，提示词切中文不改界面。
- * 数据（H3 提示词、画面摘要、台词、质量门 detail）不在此表，原样透传。
+ * UI string table: zh / en built in. Language priority is --lang > the JSON top-level lang field > 'zh',
+ * passed to the renderer as ctx.lang. It covers report UI labels only — independent of promptLang (the
+ * H3 prompt language): switching the UI to English does not change the prompt, and switching the prompt
+ * to Chinese does not change the UI.
+ * Data (H3 prompts, picture summaries, dialogue, gate details) is not in this table and is passed through as-is.
  */
-/* 门标签与「跳过」提示的英文映射：质量门面板是报告的一部分，出英文报告时
- * 这里做展示层翻译——gateReport 的逻辑与中文诊断文案一行不动（CLI 仍是中文）。
- * 动态阈值由门自己算，映射里只写固定语义；未命中的 id 回落到原标签。 */
+/*
+ * English mapping for gate labels and "skipped" notes: the quality-gate panel is part of the report, so
+ * when rendering an English report this does the display-layer translation — gateReport's logic and the
+ * Chinese diagnostic wording stay untouched line for line (the CLI is still Chinese).
+ * Dynamic thresholds are computed by the gate itself, so the mapping holds fixed semantics only; an
+ * unmatched id falls back to the original label. */
 const GATE_LABELS_EN = {
   'coverage': 'Every script beat claimed exactly once, in order, contiguous (cut level)',
   'segment-cap': 'Each segment 0 < total ≤ {1}s (the single-generation cap)',
@@ -1018,7 +1036,7 @@ const GATE_SKIPS_EN = {
     '未挂载配方卡库（--shots <卡片目录>），本门跳过（视为通过）': 'no recipe card library mounted (--shots <cards dir>) — gate skipped (treated as passing)',
     '本批分镜没有引用配方': 'no cut in this batch references a recipe',
 };
-/** 报告里的门文案：英文界面取映射，未命中或中文界面回落原文。 */
+/** Gate wording in the report: English UI takes the mapping; unmatched or Chinese UI falls back to the original. */
 const gateText = (g, lang) => {
   if (lang !== 'en') return { label: g.label, detail: g.detail };
   const en = GATE_LABELS_EN[g.id];
@@ -1189,8 +1207,8 @@ function namer(ctx = {}, t = I18N.zh) {
 }
 
 /**
- * cut 的「配方」列：卡名 + 偏离建议景别／运镜时的 ≠ 标记。
- * 偏离只提示不设门——配方是语汇不是法条（理由见 recipeDrift 上方注释）。
+ * A cut's "Recipe" column: the card name + a ≠ mark when it deviates from the suggested shot size / camera move.
+ * Deviations are advisory and not gated — a recipe is vocabulary, not law (see the comment above recipeDrift).
  */
 function cutRecipe(cut, recipes, t) {
   const id = typeof cut?.recipe === 'string' ? cut.recipe : '';
@@ -1203,7 +1221,7 @@ function cutRecipe(cut, recipes, t) {
   };
 }
 
-/** 分镜认领的节拍 → 画面摘要（动作原文 + 台词行），模型不重写。 */
+/** The beats a cut claims → picture summary (the action text + dialogue lines), not rewritten by the model. */
 function cutBeats(cut, scene) {
   if (!scene) return [];
   const [from, to] = cut.beats ?? [];
@@ -1268,10 +1286,11 @@ export function renderMarkdown(board, ctx = {}) {
 /* render — html                                                       */
 /* ------------------------------------------------------------------ */
 /*
- * 与另外四份报告同一套视觉语言。设计约定见 references/report-style.md。
- * 图片是用户在下游出好的素材，位置由 CLI 注入的 ctx.image(kind, rel) 决定：
- * kind 是 'frame'（<段号>/f<切序>.png）或 'sheet'（<场景 slug>-sheet.png），
- * 返回 src 或 null。有就内嵌显示 + 点击放大，没有就显示占位——不猜、不骗。
+ * The same visual language as the other four reports. For design conventions see references/report-style.md.
+ * Images are assets the user generated downstream, and their location is decided by ctx.image(kind, rel)
+ * injected by the CLI: kind is 'frame' (<segment id>/f<cut index>.png) or 'sheet' (<scene slug>-sheet.png),
+ * returning src or null. If present, embed and enlarge on click; if absent, show a placeholder — never
+ * guess, never pretend.
  */
 
 function embedDoc(doc) {
@@ -1279,14 +1298,15 @@ function embedDoc(doc) {
 }
 
 /*
- * 分镜图位的画幅。正式合同是 storyboard.json 顶层的 aspectRatio（9:16 / 16:9，见
- * references/schema.md 与 references/frame.md）；图位要是写死 16:9，竖图就被 object-fit:cover
- * 裁成一条横带——看报告的人会以为构图出了问题。认的顺序：
- *   1. 顶层 `aspectRatio`——skill 自己的正式字段，最权威；
- *   2. 顶层 `_meta.orientation`——旧版下游应用写入的数据，只作兼容；
- *   3. 每切 frame 末尾的画幅标签，数多的那个——没有元数据的旧分镜仍然可以识别；
- *   4. 都认不出就是 16:9。
- * 只管分镜图：批次卡里的场景设定图（`.bimg`）一律按 16:9 出，不跟剧的画幅走。
+ * The aspect ratio of the frame slots. The formal contract is the top-level aspectRatio of
+ * storyboard.json (9:16 / 16:9, see references/schema.md and references/frame.md); if the slots were
+ * hard-wired to 16:9, a vertical frame would be cropped by object-fit:cover into a horizontal band —
+ * and the reader would think the composition was wrong. Resolution order:
+ *   1. top-level `aspectRatio` — the skill's own formal field, the most authoritative;
+ *   2. top-level `_meta.orientation` — data written by older downstream apps, compatibility only;
+ *   3. the aspect tag at the end of each cut's frame, whichever is most common — older storyboards without metadata remain recognisable;
+ *   4. if none can be determined, 16:9.
+ * Frames only: the scene sheets in batch cards (`.bimg`) are always laid out at 16:9, not following the drama's ratio.
  */
 const ASPECT_RATIOS = new Set(['16:9', '9:16']);
 
@@ -1313,10 +1333,11 @@ function boardAspect(board) {
   return portrait > landscape ? '9:16' : '16:9';
 }
 
-// 竖屏才追加；横屏一个字节都不多，报告与改动前逐字节一致。主图收窄居中——
-// 整卡宽的 9:16 一张就有一屏多高，子分镜条四格竖缩略图照旧铺满
+// Appended for portrait only; landscape adds not a single byte, so the report is byte-identical to before.
+// The master frame is narrowed and centred — a full-card-width 9:16 runs more than one screen tall; the
+// sub-frame strip's four-column vertical thumbnails still fill as before
 const PORTRAIT_FRAME_CSS = `
-/* 竖屏 9:16：分镜图位跟着画幅改竖（场景设定图 .bimg 仍是 16:9） */
+/* Portrait 9:16: frame slots follow the ratio to portrait (scene sheets .bimg stay 16:9) */
 .frame,.subf{aspect-ratio:9/16}
 img.frame{width:min(100%,300px);margin:0 auto}`;
 

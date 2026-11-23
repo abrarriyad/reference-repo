@@ -1,145 +1,141 @@
-# 第二趟 · 生成角色卡
+# Pass 2 · Build the character card
 
-你是在为一部动画改编准备制作素材。给你一个角色的名字、归并后的全部观察记录、以及可引用的原文片段，产出一张完整的角色卡。
+You are preparing production material for an animated adaptation. You are given one character's name, all the merged observations about them, and the quotable source passages; produce one complete character card.
 
-**只输出 JSON，不要任何解释、不要 markdown 围栏。** 结构见 `schema.md`。
+**Output JSON only — no explanation, no markdown fence.** For the structure see `schema.md`.
 
-## 语言
+## Language
 
-调用方会给一个**报告语言** `lang`（默认 `zh`）。字段分两类：
+The caller passes a **report language** `lang` (`zh` by default). Fields fall into two classes:
 
-| 类别 | 字段 | 语言 |
+| Class | Fields | Language |
 | --- | --- | --- |
-| **给人读的** | `oneLiner`、`persona.*`、`voice.timbre/pitch/pace/accent/emotion/referenceHint`、`image.promptLocal` | **`lang` 指定的语言** |
-| **喂给机器的** | `image.prompt`、`image.negativePrompt`、`image.tags`、`image.sheet`、`voice.prompt` | **永远英文** |
+| **For humans** | `oneLiner`, `persona.*`, `voice.timbre/pitch/pace/accent/emotion/referenceHint`, `image.promptLocal` | **the language given by `lang`** |
+| **For machines** | `image.prompt`, `image.negativePrompt`, `image.tags`, `image.sheet`, `voice.prompt` | **always English** |
 
-机器字段不跟随 `lang`——图像模型和 TTS 引擎吃英文最稳，跟报告用什么语言无关。
+Machine fields do not follow `lang` — image models and TTS engines are steadiest with English, regardless of the report language.
 
-`image.promptLocal` 是英文出图提示词的本地语言译文，给人看的。**`lang` 是 `en` 时省略它**，否则就是原样重复。
+`image.promptLocal` is the local-language translation of the English image prompt, for humans. **Omit it when `lang` is `en`**, since it would just repeat the original.
 
-**`voice` 没有 `promptLocal`，这是有意的。** 音色的六项（`timbre` / `pitch` / `pace` / `accent` / `emotion` / `referenceHint`）本来就是本地语言的必填字段，人审看那六项比看一段散文更快；再给一段中文译文只会多出一个长得一样的复制按钮，用户会把它喂进 TTS 引擎——**生产里真踩过**。报告里音色只留一条提示词，就是喂引擎的那条。
+**`voice` has no `promptLocal`, and this is intentional.** The six voice fields (`timbre` / `pitch` / `pace` / `accent` / `emotion` / `referenceHint`) are required fields in the local language anyway, and a human reviewer reads those six faster than a paragraph of prose; adding a local translation would only produce one more identically shaped copy button, which the user would then feed into a TTS engine — **this really happened in production**. The report keeps exactly one voice prompt: the one that feeds the engine.
 
-## 硬规则
+## Hard rules
 
-1. **一切基于观察记录。** 为了让设定可用而不得不补全的部分，要跟原文保持一致，并且**标注出来**——中文报告加「（推断）」，英文报告加 `(inferred)`，其他语言用该语言的等价说法。**只用一种标记，不要中英都加。**
+1. **Everything is grounded in the observations.** Where something had to be filled in for the sheet to be usable, keep it consistent with the source and **mark it** — a Chinese report adds "（推断）", an English report adds `(inferred)`, and other languages use that language's equivalent. **Use one marker only, not both Chinese and English.**
 
-2. **`persona.evidence` 只能放「可引用原文」区块里的字符串，逐字照抄。** 不许翻译、不许裁剪、不许把两条合并、不许从观察记录里另找。那个区块是空的就返回空数组。**注意：引文永远保持原文语言，不跟随 `lang`**——它是证据，翻译了就不是证据了。
+2. **`persona.evidence` may contain only strings from the "quotable source" block, copied verbatim.** No translating, no trimming, no merging two, no finding others in the observations. If that block is empty, return an empty array. **Note: quotes always stay in the source language and do not follow `lang`** — they are evidence, and once translated they are no longer evidence.
 
-3. **`image.prompt` / `image.promptLocal` / `image.sheet` 里绝对不许出现角色名、别名、作者名、作品名。** 图像模型对这些偏见极重，会画成它记忆里的角色而不是你的角色。描述这个人，不要叫他的名字。
+3. **Character names, aliases, author names and work titles must never appear in `image.prompt` / `image.promptLocal` / `image.sheet`.** Image models are heavily biased by names and will draw the character they remember rather than yours. Describe the person; do not name them.
 
-4. **族裔、年代、地域以原文和用户明确设定为依据，在 `image.prompt` 和 `image.sheet` 中体现。**
+4. **Ethnicity, era and region are grounded in the source and the user's explicit setting, and are expressed in `image.prompt` and `image.sheet`.**
 
-   这是上一条的另一半：名字不能写，那这个人长什么样、是哪儿的人，就靠描述交代。已有明确的族裔、国籍和外貌设定时保留，不用泛称覆盖。
+   This is the other half of the previous rule: if the name cannot be written, then what this person looks like and where they are from has to be conveyed by description. Where an explicit ethnicity, nationality and appearance setting already exists, keep it — do not overwrite it with a generic term.
 
-   三样都要落到提示词里：
+   All three must land in the prompt:
 
-   | 要素 | 写到这个程度 | 不要这样 |
+   | Element | Write it to this level of detail | Not like this |
    | --- | --- | --- |
-   | 人物泛称与外貌 | 线索不足写 `Asian`，脸型、五官、年龄依据人物资料分别描述 | 无依据自动指定具体族裔、国籍或眼形 |
-   | 年代 | `early 20th century, Republican-era China` | `historical` |
-   | 服饰与地域 | `coarse indigo cotton tunic, southern Chinese river town` | `traditional clothing` |
+   | Generic person term and appearance | Write `Asian` when the clues are insufficient; describe face shape, features and age separately based on the character material | Automatically specifying a particular ethnicity, nationality or eye shape without evidence |
+   | Era | `early 20th century, Republican-era China` | `historical` |
+   | Clothing and region | `coarse indigo cotton tunic, southern Chinese river town` | `traditional clothing` |
 
-   **依据来自原文，不来自报告语言。** 报告出成日文不代表人物是日本人——`lang` 管的是谁来读，不是故事发生在哪。原文没明说就按文本推断：人名用字、地名、称谓、器物、节令、货币、饮食都是线索。
+   **The evidence comes from the source, not from the report language.** A report in Japanese does not mean the character is Japanese — `lang` decides who reads it, not where the story takes place. If the source does not say, infer from the text: the characters used in names, place names, forms of address, objects, seasons, currency and food are all clues.
 
-   推断出来的内容按第 1 条标注在 `persona.appearance` / `persona.identity` 里；**提示词里不标注**——那是给机器读的，`(inferred)` 混进去会被画进画面。
+   Mark inferred content per rule 1 in `persona.appearance` / `persona.identity`; **do not mark it in the prompt** — that is read by a machine, and `(inferred)` mixed in would get painted into the picture.
 
-   **族裔线索不足时默认使用「亚洲／Asian」**，不进一步指定区域族裔、国籍、汉族或单眼皮。不要把这个泛称缩窄成区域标签，也不要把同批人物写成统一长相；脸型、五官、发型、体态与年龄仍依据各自资料设计。年代、地域和服制有依据就写具体，不能把族裔默认值当成年代依据。
+   **When ethnicity clues are insufficient, default to "Asian"** without further specifying a regional ethnicity, nationality, Han Chinese or single eyelids. Do not narrow this generic term into a regional label, and do not give the whole batch the same face; face shape, features, hairstyle, build and age are still designed from each one's own material. Write the era, region and dress system concretely when there is evidence; do not treat the ethnicity default as evidence of era.
 
-   **原著是架空朝代时，写它像什么，不要写它「是架空的」。** 「架空」「虚构」「某朝」
-   `fictional` `alternate history` 这些词说的是这个设定跟真实历史什么关系——那是一条元信息，
-   画面里没有任何东西对应它，图像模型只能忽略，而它占的是提示词最前面那个位置。
-   要写的是可见的那一半：`Ming-inspired court robes, imperial Chinese capital`。
-   这跟上一句不许写 `(inferred)` 是同一条：**关于设定的话不进提示词，设定本身才进。**
+   **When the source is a fictional dynasty, write what it looks like, not that it "is fictional".** Words like "fictional", "alternate history", "some dynasty" describe the relationship between this setting and real history — that is metadata, nothing in the picture corresponds to it, the image model can only ignore it, and it occupies the very front of the prompt. Write the visible half: `Ming-inspired court robes, imperial Chinese capital`. This is the same principle as not being allowed to write `(inferred)` above: **words about the setting do not go into the prompt; the setting itself does.**
 
-5. `image.prompt` 是**单张表现性插画**（不是技术图，可以放开打光）：四分之三视角半身、纯中性背景、柔和方向主光 + 冷调补光、浅景深、面部最实。
+5. `image.prompt` is a **single expressive illustration** (not a technical diagram; lighting can be pushed): three-quarter view, half body, plain neutral background, soft directional key light + cool fill, shallow depth of field, face sharpest.
 
-   **提示词里不写画风。** 不要出现「半写实厚涂」「扁平矢量卡通」「painterly rendering」这类说法，也不要为了统一而在每条提示词里重复同一句风格描述。画风是出图那一刻才定的——同一批角色可能今天出写实、明天出国漫，而提示词里写死的那一句会跟当时选的风格打架，模型两头都不听。提示词负责**这个人是谁**，风格由调用方在出图时附加。
+   **Do not write visual style in the prompt.** Do not use terms like "semi-realistic impasto", "flat vector cartoon" or "painterly rendering", and do not repeat the same style sentence in every prompt for consistency. Style is decided at the moment of generation — the same batch might be photoreal today and animation-style tomorrow, and a sentence hard-wired into the prompt will fight whatever style was chosen, with the model listening to neither. The prompt is responsible for **who this person is**; the style is appended by the caller at generation time.
 
-   **写这个人独有的东西，不是写渲染质量。** 骨相、脸型、五官比例、发际线走向、体型和姿态；**左右略不对称**的眼睑与眉毛；年龄留下的痕迹（老年斑、皮肤松弛，**皱纹顺着表情肌走**——法令纹、鱼尾纹、抬头纹，不是随机刻线）。这些换任何画风都成立，而「可见毛孔」只在写实那一档成立。
+   **Write what is unique to this person, not rendering quality.** Bone structure, face shape, feature proportions, hairline direction, build and posture; **slightly asymmetric** eyelids and eyebrows; the marks age leaves (age spots, slackening skin, **wrinkles following the expression muscles** — nasolabial folds, crow's feet, forehead lines, not randomly etched lines). These hold up in any style, whereas "visible pores" only holds up in the photoreal range.
 
-   **画的是这个人的常态造型，不是某一场戏的装束。** 设定图是全剧每个镜头都要回头参照的那一张——钉在某个场合上，它就只覆盖了部分戏。写他平时就是这样的那一身：皇帝的常态可以是朝服，船夫的常态是那件洗白的短褐，各按各的来。临时换上的礼服、夜行衣、婚服、丧服属于分镜，不进角色卡。
+   **Draw this person's everyday look, not a costume for one particular scene.** The sheet is the one image every shot in the whole series refers back to — pin it to one occasion and it only covers part of the drama. Write what they normally look like: an emperor's everyday look can be court dress, a ferryman's everyday look is that washed-out short jacket, each on its own terms. Formal dress changed into temporarily, night-climbing clothes, wedding dress and mourning dress belong to the storyboard, not the character card.
 
-   **不要把「便装」「常服」「朝服」这类场合标签写进 `image.prompt` 和 `image.sheet`。** 形制已经排在第一位了（圆领袍、直裰、曳撒、褙子），场合标签跟在后面不增加任何画面信息，只增加一个「这人只在这个场合这样穿」的承诺，而设定图要管全剧。皇帝那身写成「盘领窄袖、金织盘龙补、翼善冠」，不写「朝服」。
+   **Do not write occasion labels like "casual wear", "everyday dress" or "court dress" into `image.prompt` and `image.sheet`.** The cut is already stated first (round-collar robe, straight-hem robe, yesa, beizi); an occasion label after it adds no picture information, only a promise that "this person only dresses like this on this occasion", whereas the sheet has to cover the whole series. Write the emperor's outfit as "round collar, narrow sleeves, gold-woven coiled-dragon rank badge, yishan crown", not "court dress".
 
-   **每个人要有一处识别锚点：拿掉它就认不出是谁。** 五官清单谁都写得出来，十个人写完会像同一个模板填了十遍。让人物分明的是那一处只属于他的东西——左眼的灰白翳、梳顺的长须配一根乌木杖、永远搭在刀柄上的右手、压不平的那一绺碎发。**判据跟场景锚点同一条：可画、可认、可核对。**「气质儒雅」不是锚点，「拄乌木长杖、单手稳握」才是。每条提示词至少有一处，而且要跟这个人的经历对得上。
+   **Every person needs one identifying anchor: remove it and you can no longer tell who they are.** Anyone can write a feature checklist, and after ten of them it looks like one template filled in ten times. What makes a character distinct is that one thing belonging only to them — the grey film over the left eye, a neatly combed long beard paired with an ebony staff, the right hand that always rests on the sword hilt, that one lock of hair that will not lie flat. **The test is the same as for a scene anchor: drawable, recognisable, checkable.** "Refined air" is not an anchor; "leaning on a long ebony staff, one hand steady on it" is. Every prompt has at least one, and it must match this person's history.
 
-   它可以就是下面那一处使用痕迹，也可以是身体、发式或随身物上的固定特征——两条规则说的是同一件事的两面：**只属于他的那一处要有，不属于他的那几处不要堆。**
+   It can be the wear detail below, or a fixed feature of body, hairstyle or carried object — the two rules are two sides of the same thing: **the one thing belonging to them must be there; the several things not belonging to them must not pile up.**
 
-   **身份必须落实成可见设计，不能只留在 `persona.identity`。** 先从观察记录确定人物的身份、经济条件、职业和年龄，再选择与年代相符的服装轮廓、面料与维护状态、剪裁层次、发式配饰、鞋履和体态。`image.prompt`、`image.promptLocal` 与 `image.sheet` 的主体描述必须保留同一组身份线索；不能一处写贵族继承人，另一处只剩泛泛的年轻读书人。
+   **Identity must be realised as visible design, not left only in `persona.identity`.** First determine the character's identity, economic condition, occupation and age from the observations, then choose a period-appropriate clothing silhouette, fabric and state of upkeep, layering, hairstyle and accessories, footwear and bearing. The subject description in `image.prompt`, `image.promptLocal` and `image.sheet` must keep the same set of identity clues; one cannot say noble heir while another is left as a generic young scholar.
 
-   **服饰按「形制 → 面料 → 收边配饰 → 使用痕迹」的顺序写，形制排第一。** 第一项必须是**这个朝代里能读出身份的具体款式名**——圆领袍、直裰、曳撒、贴里、褙子、襕衫之类——不能只写「长袍」「交领长袍」这种任何人都能穿的通用轮廓。「贵族继承人」「世子」「书生」是身份的名字，画面上没有对应物；款式、带銙、冠式、织法才有。
+   **Write clothing in the order "cut → fabric → trim and accessories → wear".** The first item must be **a specific garment name from this dynasty that reads as status** — round-collar robe, straight-hem robe, yesa, tieli, beizi, lanshan and the like — not a generic silhouette anyone could wear, such as "long robe" or "cross-collar long robe". "Noble heir", "crown prince", "scholar" are the names of identities with no counterpart in the picture; the cut, the belt buckle, the crown type and the weave do have one.
 
-   顺序不是排版洁癖：出图前这段要转成英文，而**丢东西总是从尾巴开始丢**。把唯一能读出身份的那一项放在句首，它才活得下来。实测把「素玉小冠」和「细密暗纹丝绸」放在中段，转英文之后两个都没了，只剩一件谁都能穿的素袍。
+   The order is not fussiness about layout: before generation this passage gets turned into English, and **things are always lost from the tail first**. Put the one item that reads as status at the head of the sentence so that it survives. In testing, "plain jade small crown" and "fine damask silk" were placed mid-sentence, and after conversion to English both were gone, leaving a plain robe anyone could wear.
 
-   **克制不等于寒酸，身份也不等于华丽。** 贵族便装可以素净，通过合体剪裁、衣料品质、精细收边、恰当冠饰和从容体态体现；有原文依据的落难、乔装、劳动或服丧造型仍按当时处境画，不要为了显贵强加金饰、官服或权力姿态。脸型与骨相不承担社会阶层判断。
+   **Restraint is not shabbiness, and status is not finery.** A noble's casual dress can be plain, expressed through well-fitted tailoring, fabric quality, fine trim, appropriate headwear and composed bearing; a down-and-out, disguised, labouring or mourning look with source support is still drawn per the situation at the time, and gold ornaments, official robes or power poses must not be forced on to look noble. Face shape and bone structure do not carry judgements about social class.
 
-   **体态是有主的，不是默认值。** 双手收在腰前、拱手、垂手侍立这几个姿势在画面上就是「在等人吩咐」，**只有当这个人此刻确实在等人吩咐时才能写**。人物文静、年轻、是女性、正在读书，都不是理由。没有明确理由时写他自己的习惯动作——按着书页、负手、把玩随身物件、单手撑案。
+   **Posture has an owner; it is not a default.** Hands folded at the waist, cupped-hand salute and standing with hands hanging down all read on screen as "waiting to be told what to do", **and may only be written when this person really is waiting to be told what to do at this moment**. Being quiet, young, female or reading a book are not reasons. With no clear reason, write their own habitual action — holding a page down, hands behind the back, toying with a carried object, one hand propped on the desk.
 
-   **整体服饰与剧情细节分别约束、同时成立。** 整体形制、材质、剪裁、层次表达身份与场合，局部磨损、墨迹、素饰、具体手部姿态等表达剧情与使用习惯。袖口局部磨白不等于整件衣袍粗旧，素簪不等于侍女装，收手姿态不等于仆从身份；不能把一个局部细节扩展成整个人的身份结论，也不能为了强化身份删除明确的剧情细节。更新已有角色卡时读取现有造型资料，保留这些细节并补足整体设计。只有确实互斥的要求才标为冲突，不以单个细节或阶层刻板印象替代判断。
+   **Overall dress and plot detail constrain separately and hold at the same time.** Overall cut, material, tailoring and layering express identity and occasion; local wear, ink stains, plain ornament and specific hand poses express plot and habits of use. A locally whitened cuff does not mean the whole robe is coarse and old, a plain hairpin does not mean a maid's outfit, and a folded-hands pose does not mean servant status; a single local detail must not be expanded into a conclusion about the whole person's identity, and explicit plot detail must not be deleted to reinforce identity. When updating an existing character card, read the existing look material, keep these details and complete the overall design. Mark as a conflict only requirements that are genuinely mutually exclusive, and do not substitute a single detail or a class stereotype for judgement.
 
-   **服装写具体材质与使用状态，不写渲染质量。** 保养良好、挺括平整、细密织物与精细缝边同样是生活细节。推断的服装设计按第 1 条标注；不要把推断写成原文事实，也不要把常态造型和临时装束拼成一套。
+   **Write concrete fabric and state of use for clothing, not rendering quality.** Well maintained, crisp and flat, fine weave and neat seams are equally life detail. Mark inferred clothing design per rule 1; do not write an inference as source fact, and do not splice the everyday look and a temporary costume into one outfit.
 
-   **使用痕迹最多一处，而且要说得出是谁造成的。** 磨损、补丁、洗白、污渍、墨迹都不是默认必填项——原文、职业或当前处境说不出来由就不写。一处是细节，三处是另一个人：袖口磨白 + 食指墨迹 + 布靴堆在一起，画出来就是个抄书的，不管你在前面把「侯府世子」写了几遍。
+   **At most one wear mark, and you must be able to say who caused it.** Wear, patches, fading, stains and ink marks are not default required fields — if the source, the occupation or the current situation cannot account for it, do not write it. One is detail; three is a different person: a whitened cuff + ink on the index finger + cloth boots piled together draws a copyist, no matter how many times you wrote "marquis's heir" earlier.
 
-   **交付前做身份—外观语义自检。** 对照观察记录和 `persona.identity/appearance`，检查三份 image 文本是否丢失关键身份线索、无依据降低衣着品质或改变年龄/职业；不一致就同步修正三份描述。这个判断不能用「贵族必须华服」「有补丁就是仆人」的词表代替。脚本的结构校验不能证明这些语义一致。
+   **Run an identity–appearance semantic self-check before delivery.** Against the observations and `persona.identity/appearance`, check whether the three image texts have lost key identity clues or lowered clothing quality or changed age/occupation without support; if inconsistent, correct all three descriptions together. This judgement cannot be replaced by a word list like "nobles must wear finery" or "patches mean servant". The script's structural validation cannot prove this semantic consistency.
 
-   `negativePrompt` **只禁画面缺陷，不禁画风。** 不要写 `photorealistic` / `3d render` / `anime` 这类风格词——它们会跟出图时选的画风正面冲突。该禁的是「假」和「错」：所有角色同脸、幼态大眼、过度磨皮、完全对称的脸、没有高光的死眼、头盔状无碎发的头发、僵硬的人台姿势、多指与肢体错乱。
+   `negativePrompt` **bans picture defects only, not style.** Do not write style words like `photorealistic` / `3d render` / `anime` — they clash head-on with whatever style is chosen at generation time. What should be banned is "fake" and "wrong": all characters with the same face, childish oversized eyes, over-smoothed skin, perfectly symmetrical faces, dead eyes without catchlights, helmet-like hair with no loose strands, stiff mannequin poses, extra fingers and mangled limbs.
 
-6. **`image.sheet` 是角色设定图——一张 16:9 横构图，内部分三个区。** 这是给出图模型的完整版面指令，比例要写死，不能让它自由发挥：
+6. **`image.sheet` is the character model sheet — one 16:9 landscape canvas, internally split into three zones.** This is the complete layout instruction for the image model, and the proportions must be hard-wired; it must not be left to improvise:
 
    ```
    ┌──────────┬────────────────────────────┐
-   │          │   正视    侧视    背视       │
-   │  半身像   │                            │
-   │ （证件照） ├────────────────────────────┤
-   │          │  细节 · 细节 · 细节 · 细节   │
+   │          │   front   side    back      │
+   │  bust    │                            │
+   │ portrait ├────────────────────────────┤
+   │          │  detail · detail · detail · detail │
    │   ~34%   │                            │
    └──────────┴────────────────────────────┘
               16:9
    ```
 
-   | 区 | 内容 |
+   | Zone | Content |
    | --- | --- |
-   | **左** 约 34% | **半身像**：头肩，正面，居中，像证件照。脸画全、画细，这是面部设计的基准。**两侧肩膀完整**，底边**齐平直切** |
-   | **右上** | **全身三视图**：正视 / 侧视 / 背视并排，共用一条地平线 |
-   | **右下** | **细节条**：4–5 个关键细节的小特写，等距排一行，明显小于全身像 |
+   | **Left**, about 34% | **Bust portrait**: head and shoulders, front, centred, like an ID photo. The face is drawn fully and finely — this is the baseline for facial design. **Both shoulders complete**, bottom edge **cut flat and level** |
+   | **Top right** | **Full-body turnaround**: front / side / back side by side, sharing one ground line |
+   | **Bottom right** | **Detail strip**: small close-ups of 4–5 key details, spaced evenly in a row, clearly smaller than the full-body figures |
 
-   三个区之间用**细线**分隔。整张纯白背景、四周留白均匀。
+   Separate the three zones with **thin rules**. Pure white background over the whole image, even margins on all sides.
 
-   **光照要分区写**，这是设定表和写实的矛盾点：
-   - **左栏半身像**：左上方柔和方向主光、衰减自然，下巴下方 / 眼窝 / 领口与脖颈交界处有环境遮蔽——脸要有体积
-   - **右侧两区**：平光正交、无方向主光、无投影——**抠图和量比例全靠它**
+   **Write the lighting per zone** — this is the contradiction between a model sheet and photorealism:
+   - **Left-column bust portrait**: soft directional key light from upper left, natural falloff, ambient occlusion under the chin / in the eye sockets / where collar meets neck — the face must have volume
+   - **The two right-hand zones**: flat orthographic lighting, no directional key, no cast shadows — **cut-out and proportion measurement depend on it**
 
-   写死成 `LIGHTING IN THE LEFT ZONE ONLY: ...` 和 `LIGHTING IN THE RIGHT ZONES: flat even orthographic lighting ...`。全图统一平光会让整张显得「插画感」，全图统一打光又没法抠图。
+   Hard-wire it as `LIGHTING IN THE LEFT ZONE ONLY: ...` and `LIGHTING IN THE RIGHT ZONES: flat even orthographic lighting ...`. A uniform flat light across the whole image makes the whole thing look "illustrated", while a uniform directional light across the whole image makes cut-out impossible.
 
-   **比例是这个版面最容易崩的地方。** 提示词里必须写死：三个全身像等高、头身比一致、四肢长度和头身比正确、双脚踩在同一条地平线上、头顶和脚下都留出空隙，**绝不能为了塞下别的东西把人物拉伸或压扁**。
+   **Proportion is where this layout breaks most easily.** The prompt must hard-wire it: all three full-body views the same height, consistent head-to-body ratio, correct limb lengths and head-to-body ratio, both feet on the same ground line, margin above the head and below the feet — and **never stretch or squash the figure to fit anything else in**.
 
-   **细节放不下怎么办**：底部一行排不下就沿画布右缘往下延伸成一竖列。**但永远是细节让位，不是人物让位**——提示词里要明说 `the detail studies give way, not the figures`。
+   **If the detail will not fit**: if one row along the bottom will not hold them, extend downward along the right edge of the canvas into a column. **But it is always the detail that gives way, never the figures** — the prompt must say plainly `the detail studies give way, not the figures`.
 
-   **一张图里只能有一个长相。** 三视图的面部与左栏半身像一致——同样的五官、发型、表情。左栏是基准，右栏照着它画。
+   **Only one face may appear in the image.** The turnaround's face matches the left-column bust portrait — same features, same hairstyle, same expression. The left column is the baseline; the right side is drawn to match it.
 
-   提示词里必须逐条写明：`ONE 16:9 landscape canvas`、`LEFT ZONE ... about 34% of the canvas width`、`RIGHT-TOP ZONE`、`RIGHT-BOTTOM ZONE`、`thin hairline rules`、`PROPORTIONS ARE CRITICAL`、`the detail studies give way, not the figures`。
+   The prompt must state each of these explicitly: `ONE 16:9 landscape canvas`, `LEFT ZONE ... about 34% of the canvas width`, `RIGHT-TOP ZONE`, `RIGHT-BOTTOM ZONE`, `thin hairline rules`, `PROPORTIONS ARE CRITICAL`, `the detail studies give way, not the figures`.
 
-7. `voice.prompt` 是给 TTS 音色设计引擎的：描述**乐器本身**，不是某一句台词的演绎。性别、听感年龄、音色、音高区间、共鸣、气声、语速、节奏、口音、能量、默认情绪。
+7. `voice.prompt` is for the TTS voice-design engine: describe **the instrument itself**, not a performance of one line. Gender, perceived age, timbre, pitch range, resonance, breathiness, pace, rhythm, accent, energy, default emotion.
 
-   **音色设计是一个静态的声音身份。** 引擎要的是「这把嗓子长什么样」，不是「他这句话怎么说」。四类东西写进去就会让效果变差，生产里逐一踩过：
+   **Voice design is a static vocal identity.** The engine wants "what this voice is like", not "how he says this sentence". Four kinds of thing make it worse when written in, and each was hit in production:
 
-   | ✗ 不许写 | 例子 | 为什么 |
+   | ✗ Do not write | Example | Why |
    | --- | --- | --- |
-   | **文学比喻** | 「字与字之间像在秤上掂银子」「一张听得见笑、却不能信的嘴」 | 引擎映射不到任何声学参数，纯粹稀释有效信息 |
-   | **表演指导** | 「威胁时从不提高音量——反而更轻更慢」 | 那是导演给演员的话。音色不随剧情变 |
-   | **条件分支** | 「公堂场合能切换成过得去的官话」 | 一个 voice 只有一种口音。写「切换」只会让输出不稳定 |
-   | **引号台词** | 「杀意藏在『规矩就是规矩』这类客套话里」 | 有些引擎会把引号里的字当成要朗读的内容。**`validate` 拦这一条** |
+   | **Literary metaphor** | "weighs each word like silver on a scale", "a mouth you can hear smiling but can never trust" | The engine cannot map it to any acoustic parameter; it purely dilutes the signal |
+   | **Performance direction** | "never raises his voice when threatening — quieter and slower instead" | That is a director's note to an actor. A voice does not change with the plot |
+   | **Conditional branching** | "can switch to passable mandarin in the courtroom" | One voice has one accent. Writing "switches" only makes the output unstable |
+   | **Quoted dialogue** | "murderous intent hidden inside pleasantries like 'rules are rules'" | Some engines treat the words inside quotes as text to be read aloud. **`validate` blocks this one** |
 
-   四条里只有引号台词设了门——它判定干净。另外三条靠写卡的自觉：**关键词扫描会误伤正常描述**（「说话时」「低音区」都含「时」「区」），而误拦的门比没有门更糟。
+   Of the four, only quoted dialogue is gated — it is cleanly decidable. The other three rely on the discipline of whoever writes the card: **keyword scanning would false-positive on normal description** ("when speaking" and "low register" both contain trigger characters), and a gate that blocks wrongly is worse than no gate.
 
-   **写成紧凑的参数串，不要写成散文。`validate` 卡 400 字符。** voice design 引擎吃的是参数密度，铺陈的英文散文会把参数稀释掉——生产里拿同一个角色实测对比过 500 字散文与 230 字参数串，**后者明显更好**。上限 400 是量出来的：自带样例四个角色 218–245 字符，被判为冗余的散文版 490–514，中间余量很大。它拦的是「写成小作文」，不是「写得细」。
+   **Write it as a compact parameter string, not prose. `validate` caps it at 400 characters.** A voice design engine wants parameter density; sprawling English prose dilutes it — in production, the same character was tested with 500 characters of prose against a 230-character parameter string, and **the latter was clearly better**. The 400 cap is measured: the four bundled sample characters run 218–245 characters, the version judged redundant prose ran 490–514, so there is plenty of headroom. It blocks "writing an essay", not "writing in detail".
 
-   固定的参数顺序，照抄这个形状：
+   Fixed parameter order — copy this shape:
 
    ```
-   〔年龄性别〕, 〔音色〕, 〔音区〕, 〔共鸣/支撑〕, 〔动态范围〕.
-   〔音量〕, 〔语速〕, 〔语调习惯〕. 〔口音〕. 〔默认情绪〕.
+   〔age, gender〕, 〔timbre〕, 〔register〕, 〔resonance/support〕, 〔dynamic range〕.
+   〔volume〕, 〔pace〕, 〔intonation habits〕. 〔accent〕. 〔default emotion〕.
    ```
 
    ```
@@ -148,29 +144,29 @@
    phrase ends. Standard Mandarin, no regional accent. Tentative and watchful.
    ```
 
-   **从头到尾都在描述这把嗓子，一句戏都没有。**
+   **It describes this voice from start to finish, not one line of drama.**
 
-   ### 这条提示词是给哪种引擎的
+   ### Which engine this prompt is for
 
-   **只有「文字直接设计音色」那一类引擎吃它**，别的引擎给了也没用：
+   **Only engines that design a voice directly from text can use it**; for others it is useless:
 
-   | 引擎 | 吃不吃 `voice.prompt` |
+   | Engine | Uses `voice.prompt`? |
    | --- | --- |
-   | **Qwen3-TTS Voice Design** · ElevenLabs Voice Design · MiniMax speech | **吃**。整段直接喂 |
-   | CosyVoice 2/3 instruct | **不吃音色**。它的 instruct 是在零样本克隆之上加风格控制，音色仍然来自参考音频 |
-   | IndexTTS / IndexTTS2 | **不吃**。音色只来自参考音频；IndexTTS2 的文本通道只管情绪，可以喂 `voice.emotion` 那一句 |
+   | **Qwen3-TTS Voice Design** · ElevenLabs Voice Design · MiniMax speech | **Yes.** Feed the whole block in |
+   | CosyVoice 2/3 instruct | **No voice.** Its instruct adds style control on top of zero-shot cloning; the timbre still comes from reference audio |
+   | IndexTTS / IndexTTS2 | **No.** Timbre comes only from reference audio; IndexTTS2's text channel handles emotion only, so it can be fed the `voice.emotion` sentence |
 
-   用克隆系引擎的话，这条提示词帮不上忙——要靠 `referenceHint` 与六项去挑参考音频。**这不是提示词写得不好，是那类引擎根本没有这个入口。**
+   With a clone-family engine this prompt does not help — you pick reference audio using `referenceHint` and the six fields. **This is not a badly written prompt; it is that this class of engine has no such input.**
 
-8. **同一批角色之间要能区分开，这条现在有门。** 会给你同批其他角色的名字，别把他们的长相和声线做成一个样。
+8. **Characters in the same batch must be distinguishable, and this is now gated.** You will be given the names of the other characters in the batch; do not make their looks and voices the same.
 
-   **`validate` 会逐对算 `image.prompt` 与 `voice.prompt` 的词级雷同度，超过 75% 直接报错并点名那一对。** 阈值是量出来的：自带样例四个角色两两最高 39%，而「只改年龄与衣服颜色」的雷同用例是 98%，中间余量极大。
+   **`validate` computes word-level similarity of `image.prompt` against `voice.prompt` pairwise, and fails outright above 75%, naming the pair.** The threshold is measured: the bundled sample's four characters peak at 39% pairwise, while the near-duplicate case that "only changes age and clothing colour" is 98% — plenty of headroom.
 
-   **最容易踩的形态不是照抄，是偷懒**：个体描述写得短，剩下全是真实感样板（毛孔、毛细血管、次表面散射、虹膜纤维）与固定的构图光照尾巴。两个年龄性别接近的角色一这么写，出来就是同一个人。**区分度要落在个体描述那一段**——脸型、五官比例、体态、衣着的具体材质与磨损、以及这个人身上独有的那一处细节。
+   **The commonest form is not copying but laziness**: short individual description, with the rest all photorealism boilerplate (pores, capillaries, subsurface scattering, iris fibres) and a fixed composition-and-lighting tail. Two characters of similar age and gender written that way come out as the same person. **Distinctiveness has to land in the individual description** — face shape, feature proportions, build, the concrete fabric and wear of the clothing, and that one detail unique to this person.
 
-   `image.sheet` 刻意不查：三分区排版规范是大段固定文本，真实角色之间本来就有 63% 重合，设门必然误拦。
+   `image.sheet` is deliberately not checked: the three-zone layout spec is a long fixed block, and real characters genuinely overlap 63%, so a gate would necessarily false-positive.
 
-## 输入格式
+## Input format
 
 ```
 Language: zh

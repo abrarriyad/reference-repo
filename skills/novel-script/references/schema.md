@@ -1,6 +1,6 @@
-# script.json 结构
+# script.json structure
 
-一份剧本文件覆盖一个集数区间（通常一批 ≤ 3 集），顶层：
+One script file covers a range of episodes (usually a batch of ≤ 3 episodes), top level:
 
 ```json
 {
@@ -10,63 +10,63 @@
 }
 ```
 
-`params` 可省略，省略就用默认值。四个键都只在需要偏离默认时写。
+`params` may be omitted, in which case defaults apply. Write any of the four keys only when you need to deviate from the default.
 
 ## episode
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `ep` | int | 集号，正整数，同一文件内不许重复 |
-| `targetSeconds` | number | 目标秒数。seed 会从大纲的 `minutesPerEpisode × 60` 算好 |
-| `hook` | string | 开场钩子的说明——这一集头几拍靠什么把人摁住。**必填** |
-| `cliff` | string | 结尾悬念的说明——最后一拍留什么让人点下一集。**必填** |
-| `beatsClaimed` | string[] | 认领的大纲爽点 `type`（如 `"身份揭破"`）。没有就空数组，**字段本身必须在** |
-| `hookBeat` | [int, int] | **钩子具象的认领位置** `[场, 拍]`：钩子说皮箱，哪一拍真给了皮箱。必须落在全集前 `hookWindow`（默认 3）拍内——冷开场规则，门查位置 |
-| `scenes` | scene[] | 场次，按剧情顺序 |
+| `ep` | int | Episode number, a positive integer, no duplicates within one file |
+| `targetSeconds` | number | Target seconds. seed computes it from the outline's `minutesPerEpisode × 60` |
+| `hook` | string | A description of the opening hook — what pins people down in this episode's first few beats. **Required** |
+| `cliff` | string | A description of the closing suspense — what the last beat leaves so people click the next episode. **Required** |
+| `beatsClaimed` | string[] | The outline beat `type`s it claims (e.g. `"身份揭破"`, "identity exposed"). Use an empty array if none, but **the field itself must be present** |
+| `hookBeat` | [int, int] | **The claimed position of the hook's concrete form** `[scene, beat]`: if the hook says the suitcase, which beat actually gives the suitcase. It must fall within the first `hookWindow` (default 3) beats of the episode — the cold-open rule, with the gate checking the position |
+| `scenes` | scene[] | Scenes, in story order |
 
-`hook` / `cliff` 是**说明不是台词**——它们描述开场和结尾要达成的效果，具体的戏写在场次里。说明配合 `hookBeat` 认领：**说明给人读，认领给机器查**——钩子和第一场开头衔接不上，就是缺了认领这一环。
+`hook` / `cliff` are **descriptions, not dialogue** — they describe the effect the opening and ending must achieve, and the concrete drama is written in the scenes. The description works with the `hookBeat` claim: **the description is for people to read, the claim is for machines to check** — if the hook does not connect with the beginning of the first scene, the claim is the missing link.
 
-## scene（场次）
+## scene
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `sceneId` | string | `S01` 格式，对账 art.json 的场景 |
-| `lighting` | string | 该场用的光照状态名，必须是 art.json 里该场景登记过的状态。可省略 |
-| `characters` | string[] | 本场出场角色（`C01` 格式，对账 outline.json）。空镜给空数组 |
-| `props` | string[] | 本场用到的叙事道具（`P01` 格式，对账 art.json）。可省略 |
-| `flow` | beat[] | 节拍流，**动作与台词交替**，按发生顺序 |
+| `sceneId` | string | `S01` format, reconciled against art.json's scenes |
+| `lighting` | string | The lighting state name used in this scene; must be a state registered for that scene in art.json. May be omitted |
+| `characters` | string[] | Characters appearing in this scene (`C01` format, reconciled against outline.json). Use an empty array for an empty shot |
+| `props` | string[] | Narrative props used in this scene (`P01` format, reconciled against art.json). May be omitted |
+| `flow` | beat[] | The beat flow, **alternating action and dialogue**, in order of occurrence |
 
-## beat（节拍）——二选一
+## beat — one of two
 
-**动作节拍**：
+**Action beat**:
 
 ```json
-{ "action": "沈知微一把按住箱盖。动作快得不像闺秀，倒像护崽的兽。" }
+{ "action": "沈知微 slams her hand down on the lid. The motion is too fast for a lady's, more like a beast guarding its young." }
 ```
 
-**台词节拍**：
+**Dialogue beat**:
 
 ```json
-{ "speaker": "C01", "line": "不劳烦。它跟我。", "delivery": "声音很轻，却没商量" }
+{ "speaker": "C01", "line": "不劳烦。它跟我。", "delivery": "voice very soft, but not up for discussion" }
 ```
 
-| 字段 | 说明 |
+| Field | Description |
 | --- | --- |
-| `action` | 叙述体画面描述，一拍一件事。**不许出现引号台词**（「」『』“”都不行）——台词混进动作就没法计秒、没法喂 TTS |
-| `speaker` | 本场 `characters` 里的角色 id，或 `"VO"`（画外音/心声——谁的心声写进 delivery） |
-| `line` | 台词本体，口语，单句 ≤ 35 字（非空白字符计） |
-| `delivery` | 表演提示：语气、动作伴随、潜台词。可省略，建议都写 |
+| `action` | Narrative description of the image, one thing per beat. **Quoted dialogue is not allowed** (not 「」『』“” either) — once dialogue is mixed into the action it can neither be timed nor fed to TTS |
+| `speaker` | A character id from this scene's `characters`, or `"VO"` (voice-over / inner voice — whose inner voice goes into delivery) |
+| `line` | The dialogue itself, colloquial, a single line ≤ 35 characters (counting non-whitespace characters) |
+| `delivery` | Performance note: tone, accompanying action, subtext. May be omitted, but writing it is recommended |
 
-一个节拍不能既有 `action` 又有 `line`；两者都没有也不行。
+A beat cannot have both `action` and `line`; having neither is not allowed either.
 
-## 时长折算（确定性）
+## Duration conversion (deterministic)
 
-- 台词秒数 = 非空白字符数 ÷ `charsPerSecond`（标点算时间——停顿也是时间）
-- 动作秒数 = 动作节拍数 × `actionSeconds`
-- 每集预估 = 全部场次之和，必须落在 `targetSeconds × (1 ± tolerance)` 内
+- Dialogue seconds = non-whitespace character count ÷ `charsPerSecond` (punctuation counts as time — pauses are time too)
+- Action seconds = number of action beats × `actionSeconds`
+- Each episode's estimate = the sum over all scenes, and it must fall within `targetSeconds × (1 ± tolerance)`
 
-三分钟（180 秒）一集的参考体量：约 45–55 个节拍，其中台词 30 句上下。两分钟（120 秒）约 35 拍、台词 20 句上下。
+Reference volume for a three-minute (180-second) episode: about 45–55 beats, of which around 30 are lines of dialogue. For two minutes (120 seconds), about 35 beats and around 20 lines of dialogue.
 
-## ID 纪律
+## ID discipline
 
-角色用 outline.json 的 `C` 编号（不是 cast.json 的名字），场景道具用 art.json 的 `S` / `P` 编号。报告渲染时给了 `--outline` / `--art` 会自动把编号显示成名字——**数据里存编号，界面上看名字**。
+Characters use outline.json's `C` numbers (not cast.json's names), and scenes and props use art.json's `S` / `P` numbers. When the report is rendered with `--outline` / `--art` given, the numbers are automatically shown as names — **store numbers in the data, see names on the interface**.

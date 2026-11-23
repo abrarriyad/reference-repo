@@ -1,30 +1,30 @@
-# 分卷摘要 · 中间产物
+# Volume summaries · intermediate product
 
-给你一卷原文（若干章），产出这一卷的改编原料。**只输出 JSON，不要任何解释、不要 markdown 围栏。**
+You are given one volume of the source text (several chapters) and produce the adaptation raw material for that volume. **Output JSON only — no explanation, no markdown fences.**
 
-后面做大纲的人**看不到原文，只看得到你写的摘要**——所以线索必须落在纸面上，不能指望"到时候再翻书"。
+The person who builds the outline afterwards **cannot see the source text, only the summary you write** — so the leads must be put down on paper; do not count on "looking it up in the book later".
 
-## 输出格式
+## Output format
 
 ```json
 {
   "plotlines": [
-    { "name": "沈知微翻案线", "events": "这一卷里该线发生了什么，按顺序，写具体", "hookPotential": "这条线里能当爽点用的时刻" }
+    { "name": "沈知微's case-reversal line", "events": "What happens on this line in this volume, in order, specifically", "hookPotential": "Moments on this line that can serve as beats" }
   ],
   "characters": [
-    { "name": "老周", "aliases": ["老伯"], "doing": "这一卷里他做了什么、和谁产生了关系" }
+    { "name": "老周", "aliases": ["老伯"], "doing": "What he does in this volume and who he becomes connected with" }
   ],
   "beatMaterial": [
-    { "moment": "陆行远当众掏出口袋", "type": "身份揭破", "evidence": "口袋里是一方旧砚，不是枪" }
+    { "moment": "陆行远 pulls out his pocket in front of everyone", "type": "身份揭破 (identity exposed)", "evidence": "What was in the pocket was an old inkstone, not a gun" }
   ],
-  "settings": ["渡船船舱", "县城当铺"]
+  "settings": ["ferry cabin", "county-town pawnshop"]
 }
 ```
 
-## 规则
+## Rules
 
-- `plotlines` 按线整理不按章——章是物理切分，线才是改编单位
-- `beatMaterial.evidence` **逐字复制原文片段，保持原文语言**。爽点素材必须能指回原文，这是「禁止凭书名脑补」的落地
-- `characters.aliases` 把这一卷里出现的所有称谓都收进来，跨卷归并靠它
-- `settings` 只列实际发生过戏的地点，提到但没进行动作的不算
-- 不做取舍判断——砍线合人是下一步的事，这一步只负责让原料齐全
+- `plotlines` are organized by line, not by chapter — chapters are a physical split, while lines are the unit of adaptation
+- `beatMaterial.evidence` is **copied verbatim from the source passage, keeping the source language**. Beat material must be able to point back to the source; this is how "no inventing content from the title" is enforced
+- `characters.aliases` collects every form of address that appears in this volume; cross-volume merging relies on it
+- `settings` lists only places where drama actually took place; places that are mentioned but where no action happens do not count
+- Make no judgements about what to keep — cutting lines and merging people is the next step; this step is only responsible for making the raw material complete

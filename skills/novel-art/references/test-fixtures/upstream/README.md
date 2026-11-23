@@ -1,9 +1,9 @@
-# 上游产物夹具
+# Upstream artifact fixtures
 
-这几份 JSON 是上游 skill 样例的**拷贝**，只给 `scripts/selftest.mjs` 当输入使用，让本 skill 单独拷走也能跑自测。
+These JSON files are **copies** of upstream skill samples, used only as input by `scripts/selftest.mjs`, so that this skill can be copied away alone and still run its self-test.
 
 - `渡口-cast.json` ← `novel-characters/examples/渡口-cast.json`
 - `渡口-outline.json` ← `novel-outline/examples/渡口-outline.json`
 
-- 它们不是本 skill 的样例，不要在文档里当样例引用
-- 上游样例改了字段，这里不会自动跟上。需要时整份重新拷贝，再跑自测
+- They are not this skill's samples; do not cite them as samples in documentation
+- If an upstream sample changes its fields, these do not follow automatically. When needed, re-copy the whole file, then re-run the self-test

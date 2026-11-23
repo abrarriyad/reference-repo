@@ -1,32 +1,32 @@
-# 认图：从场景图里认出能站能坐的东西
+# Image recognition: recognizing what can be stood on or sat on from the scene image
 
-每个地点（美术场景）认一次，同一个地点的每一场都使用这一份。认出来的清单就是排站位时能使用的全部东西：每个人落在其中一件东西的哪一侧。所以清单要跟图一致，**图里有的才写**。
+Do this once per location (art scene), and every scene in the same location uses this one result. The recognized list is all the items that can be used when planning blocking: each person lands at one side of one of them. So the list must agree with the image, and **only what is in the image gets written**.
 
-为什么看图、不看提示词：图只照提示词画了一部分，提示词里写了、图上没画出来的东西很常见（实测：提示词里有北端主位高台，图上没有，站位就让人坐在一个不存在的高台上，出来的视频每一段都不一样）。视频和分镜图都是照着这张图出的，站位就得落在这张图上。
+Why look at the image and not the prompt: the image only draws part of what the prompt says, and things written in the prompt but not drawn in the image are common (found in a real test: the prompt had a head-seat platform at the north end, the image did not, and the blocking sat a person on a platform that does not exist, so the resulting video differed in every segment). The video and the storyboard images are both generated from this image, so the blocking must land on this image.
 
-## 看哪一块
+## Which part to look at
 
-novel-art 的场景设定图是一张 16:9 的版面：**左上约 72% 宽 × 70% 高是主视角**，右列和底行是细节特写。只看主视角那一块认东西；`box` 仍然按**整张图**的宽高量（左上角 0,0，右下角 1,1），报告会把框画在整张图上。
+novel-art's scene sheet is a 16:9 layout: **the upper-left about 72% wide × 70% high is the main view**, and the right column and bottom row are detail close-ups. Recognize items from the main-view block only; `box` is still measured against the **whole image's** width and height (upper left 0,0, lower right 1,1), and the report draws the box on the whole image.
 
-主视角的机位在南侧向北看：图的左边是西、右边是东，越往上（越远）越靠北，越往下（越近）越靠南。
+The main view's camera is on the south side looking north: the left of the image is west and the right is east; the higher up (farther away), the farther north, and the lower down (closer), the farther south.
 
-## 写什么
+## What to write
 
-1. **只写人会站在旁边、坐在上面、走过去的东西**：桌、椅、长凳、沙发、床、柜台、台子、台阶、门、窗、屏风、楼梯、栏杆、柱子、船板、大件摆设。墙上的画、桌上的茶杯、灯这类小东西不写，除非它是这个空间里唯一能当参照的东西。
-2. **图里看不到的不写。** art.json 的场景提示词和锚点只用来帮你认图里那件东西叫什么——提示词里写了、图上没有的，一律不写；图上有、提示词没写的，照写。
-3. **一件东西一条。** 围着桌子摆的一圈椅子不单独写——坐在桌边的人就写在桌子的哪一侧，桌子替它们说了；只有主位那一把、离开桌子单独摆着的椅子、沙发、凳子单独一条（主位决定谁坐主位）。
-4. **名字写成走位里说得出口的叫法**，十个字以内，同类的东西用方位或特征分开（「北端主位太师椅」「东侧落地窗」「西墙边的沙发」）。不写人名。另一种语言写进 `alt`。
-5. 房间中间一大片空地、门口一块地方，如果没有家具可以当参照，可以写成一条（「大厅中央空地」），框住那块地面。
-6. **`box`** 框住这件东西在图上占的地方；被前面的东西挡住一部分的，框看得见的那部分加上被挡住的大致范围。
-7. **`plan`** 是把整个房间摆平以后从正上方看：北在上、南在下（机位那一侧）、西在左、东在右。按透视推算真实位置和大小——图上越小、越靠上的东西在平面上越靠北；一张从近处一直伸到远处的长桌，图上是个梯形，平面上是一条南北走向的长条；贴着左墙的东西在平面上靠西。**同一个地点里的东西之间别重叠**，桌子和围着它的椅子之间留出人坐的地方。
-8. **`on`**：人能坐在、站在它上面写 true（椅子、长凳、床、台子、台阶、甲板），其余写 false。
-9. **`round`**：从正上方往下看是圆的或椭圆的写 true（圆桌、圆地毯、圆形花坛）。人会围着圆的东西一圈站或坐。
+1. **Write only things people will stand beside, sit on, or walk to**: tables, chairs, long benches, sofas, beds, counters, platforms, steps, doors, windows, screens, staircases, railings, pillars, boat planks, large furnishings. Pictures on a wall, teacups on a table, lamps and the like are not written, unless it is the only thing in the space that can serve as a reference.
+2. **Do not write what cannot be seen in the image.** art.json's scene prompt and anchors are used only to help you identify what a thing in the image is called — anything written in the prompt but not on the image is never written; anything on the image but not in the prompt is written as seen.
+3. **One entry per item.** A ring of chairs around a table is not written separately — a person seated at the table is written at some side of the table, and the table speaks for them; only the head-seat chair, and chairs, sofas and stools standing alone away from the table, get an entry each (the head seat decides who takes the head seat).
+4. **Write names as terms that can be said aloud in blocking**, within ten characters, with things of the same kind told apart by direction or feature ("north-end head-seat armchair", "east-side floor-to-ceiling window", "sofa by the west wall"). Do not write people's names. The name in the other language goes in `alt`.
+5. A large open area in the middle of the room or a spot by the door, if there is no furniture to serve as a reference, can be written as one entry ("open floor at the hall's centre"), boxing that patch of floor.
+6. **`box`** boxes the place the item occupies on the image; for one partly hidden by something in front, box the visible part plus the rough extent of the hidden part.
+7. **`plan`** is the room laid flat and viewed from directly above: north at the top, south at the bottom (the camera side), west on the left, east on the right. Reckon the real position and size from perspective — an item that is smaller and higher up in the image is farther north on the plan; a long table stretching from near to far is a trapezoid in the image and a north–south strip on the plan; something against the left wall is toward the west on the plan. **Items in the same location must not overlap each other**, and between a table and the chairs around it leave room for people to sit.
+8. **`on`**: write true if a person can sit or stand on it (chair, long bench, bed, platform, steps, deck), otherwise false.
+9. **`round`**: write true if it is round or oval viewed from directly above (round table, round rug, round flower bed). People stand or sit in a ring around a round item.
 
-数量：4 到 20 件，按从北（图的上方、远处）到南（下方、近处）排。少了排不开人，多了多半是把杯子碗碟也写进来了。
+Count: 4 to 20, ordered from north (the top of the image, far away) to south (the bottom, close). Too few and people cannot be placed; too many is most likely because cups, bowls and plates were written in.
 
-## 写完
+## When done
 
-`readFrom` 写 `picture`。
+Write `readFrom` as `picture`.
 
 ```json
 {"sceneId":"S01","name":"渡船船舱","readFrom":"picture","items":[
@@ -34,8 +34,8 @@ novel-art 的场景设定图是一张 16:9 的版面：**左上约 72% 宽 × 70
 ]}
 ```
 
-## 还没有图
+## When there is no image yet
 
-novel-art 只交提示词，不出图。图还没出时可以先**按 art.json 推算**：主视角提示词里写了的、锚点里有的大件东西，按提示词里的方位摆到平面上。这样排出来的站位只是草稿——图出来以后，场景里的东西不一定跟提示词一样，要重新认一遍、核对站位。
+novel-art delivers only prompts and generates no images. While the image does not exist yet, you can first **reckon from art.json**: the large items written in the main-view prompt or present in the anchors, placed on the plan by the directions given in the prompt. Blocking planned this way is only a draft — once the image exists, the things in the scene are not necessarily the same as in the prompt, so recognize again and check the blocking.
 
-推算的写法：`readFrom` 写 `prompt`，不写 `box`（没有图可框），其余规则照旧。报告会在这个地点上标「没有图，按设定提示词推算」。
+How to write the reckoned version: write `readFrom` as `prompt` and no `box` (there is no image to box), with the other rules as before. The report marks this location "no image, reckoned from the design prompt".

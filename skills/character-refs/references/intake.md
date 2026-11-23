@@ -1,101 +1,100 @@
-# 一次性输入：怎么把一段描述拆成字段
+# One-time input: how to split a description into fields
 
-用户一段话描述角色，你拆进 `intake-template` 的各字段，缺的自己补，然后 `intake-check` 出确认表给用户看。
-**不要一项一项问。**只有年龄、性别、年代推不出来时才问——这三样错了，整组图都错。
+The user describes a character in one passage; you split it into the fields of `intake-template`, fill in what is missing yourself, then `intake-check` produces a confirmation table to show the user.
+**Do not ask item by item.** Ask only when age, gender or era cannot be inferred — if any of those three is wrong, the whole set of images is wrong.
 
-## 语言
+## Language
 
-`lang` 是确认表和报告的语言，照用户说话的语言填：`zh` / `en` / `ja` 内置。其他语言（法语、韩语……）：
+`lang` is the language of the confirmation table and report, filled in as the language the user speaks: `zh` / `en` / `ja` are built in. For other languages (French, Korean…):
 
 ```bash
 node scripts/character-refs.mjs ui-template fr
 ```
 
-把打印出的英文文案逐项翻译（占位符 `{n}` `{x}` 原样保留），整块放进 intake 的 `ui` 字段。缺一项 `intake-check` 就报错。
+Translate the printed English copy item by item (keeping the placeholders `{n}` `{x}` as they are), and put the whole block into the intake's `ui` field. If any item is missing, `intake-check` reports an error.
 
-每个字段两段文字：`en` 进出图提示词，**不管 `lang` 是什么都写英文**（出图模型吃英文最稳）；`text` 给人看，用 `lang` 的语言写。
-旧输入写的是 `zh`，照样认。
+Each field has two pieces of text: `en` goes into the image-generation prompt and is **written in English whatever `lang` is** (image models take English most reliably); `text` is for people to read, written in the `lang` language.
+The `zh` written by old inputs is still recognized.
 
-## 字段
+## Fields
 
-| 字段 | 进哪些图 | 写什么 |
+| Field | Goes into which images | What to write |
 | --- | --- | --- |
-| `identity` | 全部 | 年龄（整数）、性别（female / male）、族裔、年代、身份。`en` 写成一句完整的人物介绍 |
-| `face` | 全部 | 脸型、眼、眉、鼻、嘴、肤色、有辨识度的面部特征 |
-| `hair` | 全部 | 发色、长短、发型、发饰 |
-| `build` | 全身视图 | 身形、体态。可省 |
-| `skin` | 全部 | 皮肤状态。可省，省了按年龄给缺省 |
-| `outfit.top` | 全部（大头照只用这一项服装） | 上装，连同领口、袖子的状态 |
-| `outfit.bottom` | 全身视图 | 下装与鞋袜 |
-| `outfit.details` | 第三档 | 四个槽位 `hair` / `neck` / `sleeve` / `feet`，每个只写这个部位本身 |
-| `backCue` | 背面 | 只有背面看得到的东西。可省，省了按发型与服装拼 |
+| `identity` | All | Age (integer), gender (female / male), ethnicity, era, status. `en` is written as one complete sentence introducing the person |
+| `face` | All | Face shape, eyes, brows, nose, mouth, skin tone, distinctive facial features |
+| `hair` | All | Hair colour, length, style, hair ornaments |
+| `build` | Full-body views | Build and posture. May be omitted |
+| `skin` | All | Skin condition. May be omitted; if omitted, a default is given by age |
+| `outfit.top` | All (the headshot uses only this item of clothing) | The top, including the state of the collar and sleeves |
+| `outfit.bottom` | Full-body views | The bottoms, with shoes and socks |
+| `outfit.details` | Tier three | Four slots `hair` / `neck` / `sleeve` / `feet`, each describing only that body part itself |
+| `backCue` | Back | Only what can be seen from the back. May be omitted; if omitted, it is assembled from hairstyle and clothing |
 
-服装拆上下两段，是因为**大头照只能带上装**：提示词里写了裤子和鞋，改图模型就会把镜头拉远去画它们。
+Clothing is split into top and bottom because **the headshot can carry only the top**: if trousers and shoes are written in the prompt, the edit model pulls the shot back to draw them.
 
-## 来源标记
+## Source markers
 
-每个字段带 `source`：
+Each field carries a `source`:
 
-- `stated` —— 用户原话里有
-- `inferred` —— 你按身份、年代推出来的（1920 年代采茶姑娘 → 黑布裤、草鞋）
-- `default` —— 惯例缺省（皮肤、背面）
+- `stated` — it is in the user's own words
+- `inferred` — you inferred it from the status and era (a 1920s tea-picking girl → black cloth trousers, straw sandals)
+- `default` — a conventional default (skin, back)
 
-**如实标。**确认表把推断和默认的项标出来，用户只看这几项就够了。把推断标成原话，等于替用户做了决定却不说。
+**Mark honestly.** The confirmation table flags the inferred and default items, and the user needs to look only at those. Marking an inference as the user's own words amounts to making the decision for the user without saying so.
 
-## 英文怎么写
+## How to write the English
 
-- 写能画出来的东西：「wary eyes」可以，「a girl who has been through a lot」不行
-- **不写角色名**，不写画风词（anime、photorealistic、cinematic……）——画风层统一加，写进角色里会和它打架
-- 小特征写成真实状态：疤写「愈合多年的旧疤：细、平、略浅、几乎不凸」，否则会画成粉红色的新伤
-- 皮肤写到什么程度是角色属性，不是画风：统一写「泛红、有瑕疵」会让十九岁女生出成病容
-- 族裔推不出来默认东亚，并落到具体五官上
+- Write things that can be drawn: "wary eyes" works, "a girl who has been through a lot" does not
+- **No character names, no art-style words** (anime, photorealistic, cinematic…) — the style layer adds them uniformly, and writing them into the character makes them fight it
+- Write small features as real conditions: for a scar write "an old healed scar: thin, flat, slightly paler, barely raised", otherwise it gets drawn as a pink fresh wound
+- How far to take the skin is a character attribute, not an art style: writing a uniform "flushed, blemished" makes a nineteen-year-old girl come out looking ill
+- If ethnicity cannot be inferred, default to East Asian, and land it in specific facial features
 
-## 细节图
+## Detail images
 
-**细节的内容是模型按角色理解出来的，不是固定的四样。**挑的顺序：
+**The content of the details is understood by the model according to the character, not a fixed four things.** The order of picking:
 
-1. **用户点名的优先**（`source: stated`）——「细节要腰间的玉佩和左手的银戒指」
-2. 没点名，挑**这个角色最能认出来的地方**：配饰、腰间挂的东西、特别的鞋、衣服上独有的补丁
-3. 实在没有特别的，用下面四个默认槽位兜底
+1. **Those the user names first** (`source: stated`) — "the details I want are the jade pendant at the waist and the silver ring on the left hand"
+2. If none are named, pick **the places that make this character most recognizable**: accessories, things hanging at the waist, special shoes, a distinctive patch on the clothing
+3. If there really is nothing special, fall back on the four default slots below
 
-最多 8 个。**细节里的东西必须已经写在外貌或服装里**——细节只决定拍哪些特写，不给角色添新东西；
-要加新配饰，先改服装字段（那会让整组图过期，因为人变了）。加、删、改细节本身，只影响那一张细节图。
+At most 8. **What is in a detail must already be written in the appearance or clothing** — details decide only which close-ups to shoot, and do not add new things to the character;
+to add a new accessory, first change the clothing field (which makes the whole set stale, because the person has changed). Adding, deleting or changing a detail itself affects only that one detail image.
 
-### 默认槽位
+### Default slots
 
-四个，都是实测能稳定出来的：
+Four, all tested to come out stably:
 
-| 槽位 | 写什么 | 例 |
+| Slot | What to write | Example |
 | --- | --- | --- |
-| `hair` | 发饰、辫梢、发髻的一处 | the knot of her faded blue cotton headscarf at the nape |
-| `neck` | 领口与最上面**一颗**扣子 | the small standing collar and the single cloth-knot button at her throat |
-| `sleeve` | 一只袖口 | the indigo cotton sleeve rolled up above the wrist, with tea stains on the edge |
-| `feet` | 鞋与脚踝 | woven straw sandals and the trouser hems tied at the ankles |
+| `hair` | One spot of hair ornament, braid end or hair bun | the knot of her faded blue cotton headscarf at the nape |
+| `neck` | The collar and the topmost **one** button | the small standing collar and the single cloth-knot button at her throat |
+| `sleeve` | One cuff | the indigo cotton sleeve rolled up above the wrist, with tea stains on the edge |
+| `feet` | Shoes and ankles | woven straw sandals and the trouser hems tied at the ankles |
 
-只写部位本身，**不写「特写」「close-up」之类取景词**，取景由脚本加。
+Write only the body part itself, **with no framing words like "close-up"**; the framing is added by the script.
 
-**部位要小到一眼看得全。**写「斜襟和一排布扣」，斜襟从领口一路开到腋下，模型就把整个前胸都框进来（实测）；
-写「小立领和喉下那一颗布扣」就对了。领口只写领子加最上面一颗扣子，袖口只写一只。
+**Keep the part small enough to be seen whole at a glance.** Write "the diagonal placket and a row of cloth buttons" — the diagonal placket opens from the collar all the way to the armpit — and the model frames the whole chest (found in testing); write "the small standing collar and the single cloth-knot button below the throat" and it is right. For the collar write only the collar plus the topmost button, and for the cuff only one sleeve.
 
-### 自定义细节
+### Custom details
 
-默认槽位之外使用 `slot: "custom"`，另给 `id`（小写英文）和 `part`。英文同样**只写部位本身**，取景由脚本按 `part` 加。
-自定义细节在确认表和报告里标「未实测」，出完一定看图。
+Beyond the default slots use `slot: "custom"`, with an extra `id` (lowercase English) and `part`. The English likewise **writes only the body part itself**, with the framing added by the script per `part`.
+Custom details are marked "untested" in the confirmation table and report, and you must look at the image after generating.
 
-| part | 取景 | 实测（Qwen，2 个种子） |
+| part | Framing | Tested (Qwen, 2 seeds) |
 | --- | --- | --- |
-| `hands` | 只拍一只手，手占满画面 | 指尖染绿：2/2 |
-| `waist` | 只拍腰部，不见脸和腿 | 短袄下摆压裤腰：2/2（粗布有丝绒似的反光） |
-| `body` | 只拍这一处，不见脸和全身 | 胸前的钢笔：2/2（取景偏宽，带到下巴） |
-| `hair` / `neck` / `feet` | 与同名默认槽位相同 | — |
+| `hands` | Only one hand, the hand filling the frame | Green-stained fingertips: 2/2 |
+| `waist` | Only the waist, no face and no legs | A short jacket's hem pressing the trouser waist: 2/2 (coarse cloth has a velvet-like sheen) |
+| `body` | Only this one spot, no face and no full body | A fountain pen on the chest: 2/2 (framing too wide, reaching the chin) |
+| `hair` / `neck` / `feet` | Same as the default slot of the same name | — |
 
-**脸上的特征（眼镜、疤、痣）不出细节图**，写进 `face` 字段：正脸大头照里已经看得清；
-Qwen 实测三种写法 × 2 个种子，全部画成整张大头照（校验会拦 `part: face`）。用户点名要脸部特写时，照这个说明。
+**Facial features (glasses, scars, moles) do not get detail images**; write them into the `face` field: the front headshot already shows them clearly;
+in Qwen testing, three phrasings × 2 seeds all came out as a whole headshot (validation blocks `part: face`). When the user explicitly asks for a facial close-up, explain it this way.
 
-其他实测不稳的：双排扣这种大面积的扣子（取景偏远）。
+Other things found unstable in testing: large-area buttons such as double-breasted ones (framing too far out).
 
-旧输入里以 `Zoom in to ` 开头写整句的自定义细节，照样认、原样使用。
+Old inputs with a custom detail written as a whole sentence starting with `Zoom in to ` are still recognized and used as they are.
 
-## 细节只收长在角色身上的
+## Details take only what grows on the character
 
-发饰、领口、袖口、鞋、配饰。**道具不收**——皮箱、信、刀归 novel-art；角色图要「空手」，拿着东西的手会污染参考图。
+Hair ornaments, collar, cuff, shoes, accessories. **Props are not accepted** — suitcases, letters and knives belong to novel-art; character images should be "empty-handed", since a hand holding something contaminates the reference image.

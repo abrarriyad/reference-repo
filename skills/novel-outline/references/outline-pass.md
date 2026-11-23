@@ -1,36 +1,36 @@
-# 骨架 · 砍线 / 合人 / 排爽点
+# Skeleton · cut lines / merge people / arrange beats
 
-拿全部卷摘要（或短篇原文）+ 用户参数，产出 outline.json 的**骨架四块**：`adaptation` / `characters` / `scenes` / `beats`。分集梗概**这一步不写**——骨架没拍板就写分集，方向错了全废。
+Take all the volume summaries (or the short piece's source text) + the user's parameters, and produce the **four skeleton blocks** of outline.json: `adaptation` / `characters` / `scenes` / `beats`. Episode synopses are **not written in this step** — writing episodes before the skeleton is signed off wastes everything if the direction is wrong.
 
-## 顺序就是方法
+## The order is the method
 
-1. **砍线**。短剧只装得下一条主线 + 至多一条副线。砍掉的写进 `adaptation.cut`，每条都要有 why。`adaptMode` 不是忠实时一条不砍会被 validate 拦。
-2. **合人**。功能重复的角色合成一张脸（两个报信的 → 一个），合并进 `characters[].from` 的 ← 改动记录。然后**分档**（`tier`）：主角组 `lead` 1–5 人、有名字的重要配角 `support` ≤ 10、功能性角色 `functional` ≤ 10。功能性角色占脸不占名——`name` 用称呼标签（「急诊医生」），也不用写人物弧。无名背景人不进表。
-3. **收场景**。主场景上限随集数走（4 + ⌈集数/10⌉，夹在 5–15：6 集给 5 个，60 集给 10 个），以 `validate` 报的数为准。这是 AI 短剧的宽松版——场景是生成的，多开几个景换观赏性是划算的，别把戏都憋在一个屋里。原著里只出现一次的场景，要么砍掉、要么写 `reusePlan`（复用哪个现有环境资产、换什么时段天气改出来）。
-4. **排爽点**。先定 major（大爆点）落在哪几集，再拿 minor 填缝。硬规则：相邻间隔 ≤ 3 集、开头结尾无真空、最早的 major 不能在最后一集。`type` 跟着题材走——女频打脸和男频战神的爽点不是一种东西，看 `params.genre`。
-5. **收道具**。**排在爽点之后不是随便排的**——叙事道具的判据是「它托起哪个爽点」，爽点没定就分不清哪件物件是道具、哪件只是陈设。上限 8 件，跟主角数量一个量级。每件写 `function`（它在戏里承载什么）与 `beatIds`（托起哪几个爽点），分集用 `propIds` 引用。
+1. **Cut lines.** A short drama holds only one main line + at most one secondary line. Write what is cut into `adaptation.cut`, each with a why. When `adaptMode` is not faithful, cutting nothing is blocked by validate.
+2. **Merge people.** Merge functionally duplicate characters into one face (two messengers → one), recording the change in `characters[].from` ← the change log. Then **tier** them (`tier`): lead group `lead` 1–5 people, named important supporting `support` ≤ 10, functional roles `functional` ≤ 10. A functional role takes up a face but not a name — `name` uses a label ("emergency doctor"), and there is no need to write a character arc. Nameless background people do not go in the table.
+3. **Reduce the scenes.** The main-scene cap scales with episode count (4 + ⌈episodes/10⌉, clamped to 5–15: 6 episodes get 5, 60 episodes get 10); go by the number `validate` reports. This is the relaxed AI-short-drama version — scenes are generated, so opening a few more scenes to buy visual interest is worth it; do not cram all the drama into one room. A scene that appears only once in the original should either be cut or given a `reusePlan` (which existing environment asset to reuse, and what time of day/weather to change to make it).
+4. **Arrange the beats.** First decide in which episodes the major (big-reveal) beats fall, then fill the gaps with minor ones. Hard rules: adjacent gap ≤ 3 episodes, no vacuum at the start or end, the earliest major cannot be in the last episode. `type` follows genre — a female-audience face-slap and a male-audience warrior's rise are not the same kind of beat; see `params.genre`.
+5. **Reduce the props.** **Placing this after the beats is not arbitrary** — the criterion for a narrative prop is "which beat does it hold up", and until the beats are set you cannot tell which object is a prop and which is mere dressing. Cap of 8, the same order of magnitude as the number of leads. Write each one's `function` (what it carries in the drama) and `beatIds` (which beats it holds up); episodes reference them with `propIds`.
 
-   **一件东西该不该进这张表，问一句就够了：它坏了、丢了、被换掉，剧情会不会塌。** 会塌就是叙事道具（皮箱、砚台、那封信）；不会塌就是场景陈设（船舱的挂灯、桌上的茶碗），归 `novel-art` 的场景锚点管，不进这张表。填不出 `function` 的一律不收——**填不出来的不是道具，是背景**。
+   **One question settles whether a thing belongs in this table: if it broke, got lost or was swapped, would the plot collapse?** If it would, it is a narrative prop (the suitcase, the inkstone, that letter); if it would not, it is set dressing (the cabin's hanging lamp, the teabowl on the table), handled by `novel-art`'s scene anchors and not in this table. If you cannot fill in `function`, do not admit it — **what cannot be filled in is not a prop, it is background**.
 
-每一步都基于卷摘要里的原料。**关键取舍在 `adaptation.keep` 里附 `evidence`（原文逐字片段）**——大纲要能指回原文，不是凭印象改编。
+Every step draws on the raw material in the volume summaries. **For key trade-offs, attach `evidence` (a verbatim source passage) in `adaptation.keep`** — the outline must be able to point back to the source, not be adapted from impressions.
 
-砍完、合完之后各补一句结论：`adaptation.cutNote` 写砍线的含义（「这意味着：全剧终点是……」），`adaptation.mergeNote` 写主角组入选理由（谁有完整转变弧）。这两句会出现在报告最前面的「关键决策」区块，也是拍板时给用户看的核心内容。
+After cutting and merging, add one sentence of conclusion for each: `adaptation.cutNote` states the meaning of the cut ("this means: the endpoint of the whole show is…"), and `adaptation.mergeNote` states why the lead group was chosen (who has a complete arc of change). These two sentences appear in the "Key decisions" block at the very top of the report, and are the core content shown to the user at sign-off.
 
-## 两轮规则 ⛔
+## The two-round rule ⛔
 
-骨架必须跑两轮：
+The skeleton must run for two rounds:
 
-- **第一轮快版**：四块填齐、能过 `validate --stage beats` 就停，**交给用户拍板**。砍了哪条线、合了哪些人、大爆点在第几集——这三件事用户不点头，后面全是白干。
-- **第二轮细版**：吸收用户意见后细化，再过一次 `validate --stage beats`。
+- **Round one, the quick version**: fill in all four blocks, stop as soon as it can pass `validate --stage beats`, and **hand it to the user to sign off**. Which line was cut, which people were merged, in which episode the big reveal lands — without the user's nod on these three things, everything after is wasted work.
+- **Round two, the detailed version**: refine after absorbing the user's feedback, then pass `validate --stage beats` once more.
 
-快版的意义是便宜——错了只损失一轮骨架，不是 60 集梗概。
+The point of the quick version is that it is cheap — a mistake costs one round of skeleton, not 60 episodes of synopses.
 
-## 自检
+## Self-check
 
-写完跑：
+When done, run:
 
 ```bash
 node scripts/novel-outline.mjs validate <outline.json> --stage beats
 ```
 
-有违规逐条修，改完重跑，直到通过才允许进分集。
+Fix every violation one by one, re-run after each fix, and only proceed to the episodes once it passes.

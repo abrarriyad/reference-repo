@@ -1,54 +1,54 @@
-# Seedance 视频提示词 · 写法规范（内化版）
+# Seedance video prompt · writing spec (internalized)
 
-方法论学自火山引擎《Doubao Seedance 2.0 系列提示词指南》，**内化成本 skill 自带文档，不依赖外部页面**。**正文内容怎么写见 `shot-writing.md`**（一切一个运镜、动作要做得完、台词逐字、声音分层、不写画风），本文只讲 Seedance 特有的语法、符号和禁忌。
+The methodology is learned from ByteDance's 《Doubao Seedance 2.0 系列提示词指南》, **internalized into a document bundled with this skill, depending on no external page**. **For how to write the body content see `shot-writing.md`** (one camera move per cut, actions must be completable, dialogue verbatim, layered sound, no visual style); this document covers only Seedance's specific syntax, symbols and taboos.
 
-跟 H3 的差别不是措辞偏好，是协议：H3 靠正文把参考图钉到秒数上；Seedance 是一个「全模态导演」，把输入拆成空间层（画面里有什么）和时间层（怎么随时间变化），**时间层用镜头顺序表达，不用秒数**。
+The difference from H3 is not a matter of phrasing preference but of protocol: H3 pins reference images to seconds through the body text; Seedance is an "omni-modal director" that splits input into a spatial layer (what is in the picture) and a temporal layer (how it changes over time), **expressing the temporal layer through shot order, not through seconds**.
 
-## 语言：整条中文
+## Language: Chinese throughout
 
-官方示例全部是中文，台词、音效、音乐的符号约定也是按中文设计的。整条正文写中文，运镜词用 `schema.md` 词表的中文词。**台词语言要统一，避免中英混用**（专有名词除外）。
+The official examples are all in Chinese, and the symbolic conventions for dialogue, sound effects and music were designed around Chinese too. Write the whole body in Chinese, and use the Chinese terms from `schema.md`'s vocabulary for camera moves. **Keep the dialogue language consistent and avoid mixing Chinese and English** (except for proper nouns).
 
-## 官方进阶公式
+## The official advanced formula
 
-> 精准主体 + 动作细节 + 场景环境 + 光影色调 + 镜头运镜 + 视觉风格 + 画质 + 约束条件
+> Precise subject + action detail + scene environment + light and colour tone + camera move + visual style + image quality + constraints
 
-在本管线里各项的归属：
+Where each item lands in this pipeline:
 
-| 公式项 | 落在哪 |
+| Formula item | Where it lands |
 | --- | --- |
-| 精准主体、动作细节、场景环境、镜头运镜 | **每一切的正文**（本文管这个） |
-| 光影色调 | 每一切的正文里写光线方向与氛围，**不写色调名**——色调属于画风层 |
-| 视觉风格、画质 | **画风层**，由调用方在提交时附加，正文不写 |
-| 约束条件 | **全局约束**，程序拼在末尾：调用方用 `--constraints <文件>` 给（一行一条），程序再补上「无字幕」和多人同框的「禁双胞胎」 |
+| Precise subject, action detail, scene environment, camera move | **Each cut's body** (this document covers this) |
+| Light and colour tone | Write the light direction and mood in each cut's body, **without naming a colour grade** — colour grade belongs to the style layer |
+| Visual style, image quality | **The style layer**, appended by the caller at submission time; not written in the body |
+| Constraints | **Global constraints**, assembled at the end by the program: supplied by the caller with `--constraints <file>` (one per line), then the program adds "no subtitles" and, for multiple people in frame, "no twins" |
 
-## 时间层：镜头顺序，不写秒数
+## The temporal layer: shot order, no seconds
 
-官方原话：「模型对精确时间（如 0–3 秒）的支持不稳定，强行限制时长可能导致生成结果异常」，「不强制限制每段时长，优先让模型根据剧情自然生成节奏」。
+The official wording: "the model's support for precise timing (such as 0–3 seconds) is unstable, and forcibly limiting the duration may cause abnormal generation results", "do not force a limit on each segment's duration; let the model generate the rhythm naturally according to the plot".
 
-所以正文里：
+So in the body:
 
-- **不写** `0–3 秒`、`第 3 秒`、`00:03.000` 这类时间——总时长由接口参数控制，节奏交给模型
-- **不写** `【镜头1】` 这类标题——程序按切的顺序加，写了会重复
-- **不写** `@图片N`、`<Picture k>`、`[Shot k]`——参考图编号由程序按真实附件顺序加
-- 每一切只写这几秒发生什么：**运镜或切换方式 → 主体动作与表情 → 位置或空间变化**。构图不靠形容词，靠 `schema.md` 的量化字段（焦距 / 机位 / 构图 / 视线落点 / 焦点 / 稳定性）；声音归声景/配乐字段
+- **Do not write** timings like `0–3 秒`, `第 3 秒` or `00:03.000` — the total duration is controlled by the interface parameter, and the rhythm is left to the model
+- **Do not write** headings like `【镜头1】` — the program adds them in cut order, and writing them duplicates them
+- **Do not write** `@图片N`, `<Picture k>` or `[Shot k]` — reference-image numbering is added by the program in the real attachment order
+- Each cut writes only what happens in these seconds: **camera move or transition → subject action and expression → position or spatial change**. Composition does not rely on adjectives but on `schema.md`'s quantified fields (focal length / camera position / composition / eyeline / focus / stability); sound goes into the soundscape/score fields
 
-## 你写哪几个字段
+## Which fields you write
 
-| 提示词里的位置 | 字段 |
+| Position in the prompt | Field |
 | --- | --- |
-| 「画面：」行 | 每切的 `shot`（中文，通用身份） |
-| 【人物关系与构图逻辑】 | 每段的 `blocking` |
-| 焦距 / 机位 / 构图 / 视线落点 / 焦点 / 稳定性 | 每切的 `lens` / `cameraPosition` / `composition` / `eyeline` / `focus` / `stability` |
-| 音效行、光影行 | 每切可选的 `sfx` / `lighting` |
-| `<音景>` / `（配乐）` | 每段的 `soundscape` / `music`（不带符号，程序套） |
-| 运镜、景别 | 每切的 `camera` / `size` 枚举，程序转成中文词 |
-| 台词 `{}` | 不用写——程序从剧本认领的节拍逐字取 |
+| The "画面：" (picture) line | Each cut's `shot` (Chinese, generic identity) |
+| 【人物关系与构图逻辑】(character relationship and composition logic) | Each segment's `blocking` |
+| Focal length / camera position / composition / eyeline / focus / stability | Each cut's `lens` / `cameraPosition` / `composition` / `eyeline` / `focus` / `stability` |
+| Sound-effect line, light line | Each cut's optional `sfx` / `lighting` |
+| `<音景>` / `（配乐）` | Each segment's `soundscape` / `music` (without symbols; the program wraps them) |
+| Camera move, shot size | Each cut's `camera` / `size` enum; the program converts them to Chinese terms |
+| Dialogue `{}` | Not written by you — the program takes it verbatim from the beats claimed from the script |
 
-`render --html` 的提示词面板有 Seedance 页签，`export --protocol seedance` 出投产包（每段 `seedance.md` + 附件，根部 `seedance-manifest.json`）。
+`render --html`'s prompt panel has a Seedance tab, and `export --protocol seedance` produces the production pack (one `seedance.md` per segment + attachments, plus `seedance-manifest.json` at the root).
 
-## 程序拼出来的形状（示意，你不用写）
+## The shape the program assembles (illustrative; you do not write this)
 
-一段一份结构化镜头表。参考图先声明，再是段级走位，再逐镜按固定字段展开，末尾是编号约束：
+One structured shot table per segment. Reference images are declared first, then segment-level blocking, then each shot expanded by fixed fields, and numbering constraints at the end:
 
 ```
 @[图片1] = 正厅
@@ -92,40 +92,40 @@
 1. <video.seedance.prompt 逐句拆成编号>
 ```
 
-每一行只在有内容时出现：没填 `sfx` 就没有「音效：」行，没有台词写 `台词：{}`。`画面：` 后面括号里的 `（构图参考 @图片N）` 只在这一镜有分镜图时出现；纯参考图出片时没有它，构图全靠上面那几行字段——这正是它们存在的原因。
+Each line appears only when it has content: with no `sfx` there is no "音效：" line, and with no dialogue write `台词：{}`. The `（构图参考 @图片N）` in parentheses after `画面：` appears only when this shot has a frame; with reference-only generation there is none and composition rests entirely on the fields above — which is exactly why they exist.
 
-## 符号规范（官方规定，程序与门都按这个查）
+## Symbol conventions (official rules; both the program and the gate follow them)
 
-| 信息类型 | 符号 | 例 |
+| Information type | Symbol | Example |
 | --- | --- | --- |
-| 台词 | `{}` | 舍友笑着问 {考得怎么样呀，过了吗} |
-| 音效 | `<>` | `<远处传来狗叫声>` |
-| 音乐 | `（）` | `（背景中播放着快节奏的摇滚乐）` |
-| 字幕 | `【】` | **不用**——本管线不要字幕，全局约束里禁了 |
+| Dialogue | `{}` | 舍友笑着问 {考得怎么样呀，过了吗} |
+| Sound effect | `<>` | `<远处传来狗叫声>` |
+| Music | `（）` | `（背景中播放着快节奏的摇滚乐）` |
+| Subtitles | `【】` | **Not used** — this pipeline does not want subtitles; they are banned in the global constraints |
 
-- **台词逐字进 `{}`**，一个标点都不动；说话人身份、语气、是否画外音写在 `{}` 外面（画外音写「以画外音说」）。不加 `<d>`、语言标签、`(S1)` 编号
-- 小语种台词要标注语种：`用日语说道{こんにちは}`
-- 音效与音乐由程序从声景/配乐字段套上符号，正文里不重复写
+- **Dialogue goes verbatim into `{}`**, not a punctuation mark changed; the speaker's identity, tone and whether it is a voice-over go outside `{}` (voice-over writes "以画外音说"). No `<d>`, language tags or `(S1)` numbering
+- Dialogue in a minority language must be tagged with the language: `用日语说道{こんにちは}`
+- Sound effects and music are wrapped in symbols by the program from the soundscape/score fields; do not restate them in the body
 
-## 运镜
+## Camera moves
 
-直接用标准术语（中景、特写、全景、缓慢推镜、平稳横移、固定镜头……）。**一个镜头只指定一种运镜**——官方原话「不要同时要求推拉摇移，会增加画面的不稳定性」。
+Use the standard terms directly (中景、特写、全景、缓慢推镜、平稳横移、固定镜头 …). **Specify only one camera move per shot** — the official wording: "do not ask for push, pull, pan and tilt at the same time; it increases the instability of the picture".
 
-## 动作（官方四条，已并入 `shot-writing.md`）
+## Actions (the official four points, already merged into `shot-writing.md`)
 
-肢体细化 + 程度量化；优先低缓连续小动作；补充动作过渡衔接；情绪具象外化。这些跟协议无关，H3 同样适用，所以住在共同层。
+Limb specificity + quantified degree; prefer low, slow, continuous small actions; supply transitions between actions; externalise emotion concretely. These are protocol-independent and apply to H3 equally, so they live in the common layer.
 
-## 参考图与主体
+## Reference images and subjects
 
-- 分镜路径传的是**分镜图 + 上一段尾帧**，每张只承担程序在「素材职责」里指定的用途
-- **不用三视图 / 多视图当人物参考**——官方明说会被识别成多个主体，加剧 ID 漂移和「双胞胎」。人物参考用大头照 + 全身照，本管线出的分镜图本来就是单视角
-- 素材总数建议 4–5 个，**不要用满上限**，多了模型分不清优先级
-- 越需要精准参考的素材越靠前
-- 多人同框时全局约束里禁双胞胎：「视频全程禁止出现外形、着装、配饰完全一致的人物」
+- The storyboard path passes **the frames + the previous segment's last frame**, and each carries only the role the program assigns it in "asset responsibilities"
+- **Do not use turnarounds / multi-view images as character references** — the official docs say plainly they will be recognised as multiple subjects, worsening ID drift and "twins". Character references use a headshot + a full-body shot; the frames this pipeline produces are single-viewpoint anyway
+- Keep the total number of assets to 4–5; **do not use the full limit**, or the model cannot tell which has priority
+- Assets that need more precise referencing go earlier
+- With multiple people in frame, ban twins in the global constraints: "视频全程禁止出现外形、着装、配饰完全一致的人物"
 
-## 已知坑（来自官方常见问题）
+## Known pitfalls (from the official FAQ)
 
-- **风格漂移**：参考图写实而没写风格词，输出会漂成真人写实。所以画风层必须附加，即便是「写实」也要写明
-- **字幕**：无法 100% 避免，只能降低概率——约束词「保持无字幕」「避免生成任何文字或字幕」；横屏出字幕的概率明显低于竖屏
-- **中文发音**：多音字、生僻字易读错，台词里可换同音常用字（「螭龙山」→「吃龙山」）
-- **片尾噪音**：带旁白的视频片尾可能有截断杂音，后期做淡出
+- **Style drift**: if the reference images are realistic and no style word is written, the output drifts to live-action realism. So the style layer must be appended, and even "photorealistic" must be stated explicitly
+- **Subtitles**: cannot be 100% avoided, only made less likely — constraint words "保持无字幕" and "避免生成任何文字或字幕"; landscape orientation produces subtitles noticeably less often than portrait
+- **Chinese pronunciation**: polyphonic and rare characters are easily misread; in dialogue you may substitute a common homophone ("螭龙山" → "吃龙山")
+- **End-of-clip noise**: videos with narration may have truncated noise at the end; fade it out in post

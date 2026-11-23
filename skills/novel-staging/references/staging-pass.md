@@ -1,33 +1,33 @@
-# 排站位：一场戏开场时谁在哪
+# Planning blocking: who is where when a scene opens
 
-给每一场排开场站位：这一场一开始，每个出场的人在这个地点的哪件东西旁、坐还是站、面朝哪。分镜这一场第一段的开场走位就照抄它，之后各段的走位从这一句接着往下写——它定下来以后，同一场里谁坐在哪就不会每段变一次。
+Plan the opening blocking for each scene: when this scene begins, where each person who appears is relative to which item in this location, sitting or standing, and facing which way. The storyboard copies it for this scene's first-segment opening blocking, and the blocking of the later segments continues downward from this sentence — once it is fixed, who sits where within the same scene does not change from segment to segment.
 
-为什么要先排：短剧的每一段视频是一次独立生成，各段自己决定谁坐哪。群戏里六个人围一张长桌，第一段桌边多出五个没名字的宾客，第三段端酒坐着的人穿着主角的衣服——走位句一字不差地交接也没用，因为每一场第一段的那一句是分镜自己编的。
+Why plan first: every video segment of a short drama is an independent generation, and each segment decides for itself who sits where. In an ensemble scene with six people around a long table, the first segment grows five nameless guests at the table, and in the third segment the person seated serving wine is wearing the lead's clothes — handing the blocking sentences over word for word is no use either, because the sentence for each scene's first segment is invented by the storyboard itself.
 
-每场拿到：这一场的剧本（场次的 `flow`）、出场人物（`cast`）、这个地点认出来的东西（`locations[].items`）。
+For each scene you receive: this scene's script (the scene's `flow`), the people who appear (`cast`), and the items recognized for this location (`locations[].items`).
 
-## 规则
+## Rules
 
-1. **先读这一场的剧本，分清谁开场就在、谁是后来才进来的。** 后来才进来的人开场不在（`present: false`）。剧本没写某人进场，就当他开场就在。
-2. **坐还是站跟着剧本走**：一开场大家在吃饭、开会、喝茶、乘船，就坐着；站着的人要有理由——刚进门、在伺候、在撑船、被罚站、正要发难。不要为了画面好看让坐着的戏站起来。
-3. **按身份和关系排位置**，让观众一眼看懂权力关系：
-   - 长辈、掌权的人坐主位（正对入口、地势最高或最中间的那个位置）。
-   - 对立的两方隔着桌子相对，或者一坐一站；主角和站在他那边的人在同一侧。
-   - 被孤立、被看不起的人坐在最末的位置（离主位最远、靠门的一端），或者干脆站着。
-4. **给镜头留路**：这场戏里对话最多的两个人之间不要隔着第三个人；不要把所有重要的人都排在同一侧背对入口。
-5. **朝向**：坐着的人一般面朝桌子（东侧的人面朝西）；坐主位的人面朝全场；站着的人面朝他开场时在看、在说话的那个人或方向。
-6. **群演**：剧本没写还有别人，就是没有别人，其余座位空着（`extras: 0`）——不要为了「热闹」加人，视频模型会把多出来的位置画成一个个有脸的人。剧本写了满座宾客、旁观的人群，才给群演人数和他们在哪。
-7. **只使用认出来的那些东西站位**——认图结果里没有的家具不要发明，剧本里提到、图上没有的也不要使用。同一侧的几个人沿这一侧排开（`along` 至少拉开 0.12），不叠在同一个点上。只有 `on: true` 的东西才能写 `on`。围着桌子坐的人落在桌子那一件的哪一侧（「坐在长餐桌东侧」），不要落在「椅子」上。
-8. **前后几场连着在同一个地点**（一路坐船、一顿饭分几场）：没有剧情让人换位置，就照上一场的位置排，只改朝向和坐站。观众记得谁坐在哪。
-9. **写一句 `why`**：为什么这么排（谁开场不在、谁坐主位、为什么站着）。报告里显示给人看，人改的时候知道原来的考虑。
+1. **Read this scene's script first, and tell who is there from the start and who comes in later.** A person who comes in later is not present at the opening (`present: false`). If the script does not say someone enters, treat them as there from the start.
+2. **Sitting or standing follows the script**: if everyone is eating, meeting, drinking tea or riding a boat at the start, they are seated; a person standing needs a reason — just came through the door, is serving, is poling the boat, is being made to stand as punishment, is about to make trouble. Do not make a seated scene stand up for the sake of a nicer image.
+3. **Arrange positions by status and relationship**, so the audience understands the power relations at a glance:
+   - Elders and those in power sit at the head seat (the position facing the entrance, at the highest ground or in the most central place).
+   - Opposing sides face each other across the table, or one sits and one stands; the lead and those standing with them are on the same side.
+   - Those who are isolated or looked down on sit in the last position (farthest from the head seat, at the end by the door), or simply stand.
+4. **Leave a path for the camera**: do not put a third person between the two people who have the most dialogue in this scene; do not put all the important people on the same side with their backs to the entrance.
+5. **Facing**: seated people generally face the table (people on the east side face west); the person at the head seat faces the whole room; standing people face the person or direction they are looking at or speaking to at the start.
+6. **Extras**: if the script does not say there is anyone else, there is no one else, and the other seats are empty (`extras: 0`) — do not add people for "liveliness"; the video model will draw the extra positions as faces one by one. Only when the script writes a hall full of guests or a crowd of onlookers do you give a number of extras and where they are.
+7. **Use only the items that were recognized for blocking** — do not invent furniture that is not in the recognition result, and do not use things the script mentions that are not on the image. Several people on the same side are spread along that side (`along` at least 0.12 apart), and not stacked on a single point. Only an item with `on: true` may be written as `on`. People seated around a table land at some side of that table item ("seated at the east side of the long dining table"), and not on "the chairs".
+8. **Consecutive scenes in the same location** (a whole trip by boat, one meal split across several scenes): if no plot makes anyone change position, plan it as in the previous scene, changing only facing and sitting/standing. The audience remembers who sits where.
+9. **Write one `why` sentence**: why it was planned this way (who is absent at the opening, who takes the head seat, why someone stands). It is shown to people in the report, so that when they change it they know the original reasoning.
 
-## 按一句话调整
+## Adjust by one sentence
 
-有人说「把胡二爷挪到船头」「萧老太太改成站着」时，是在**现在的站位上按要求改**，不是重新排：要求说到的人和东西才动，其余每个人的 `item`、`side`、`along`、`posture`、`facing` 和群演一律照抄现在的。要求是人定的，跟剧本或上面几条冲突时按要求来；要求里说的东西认图结果里没有，就落在最接近的那件上，并在 `why` 里说一句。改完照样跑 `validate`。
+When someone says "move 胡二爷 to the bow" or "change 萧老太太 to standing", that is **a change to the current blocking as requested**, not a re-plan: only the people and items the request mentions move, and every other person's `item`, `side`, `along`, `posture`, `facing` and the extras are copied as they currently are. The request is a person's decision, and when it conflicts with the script or the rules above, the request wins; if an item the request names is not in the recognition result, land on the closest one and say so in `why`. Run `validate` as usual after the change.
 
-更快的做法是直接在报告页面上拖：见 SKILL.md 的 Step 5。
+A quicker way is to drag directly on the report page: see Step 5 of SKILL.md.
 
-## 写法
+## How to write it
 
 ```json
 {
@@ -39,8 +39,8 @@
   ],
   "extras": 0,
   "extrasWhere": null,
-  "why": "沈知微随后进舱，开场不在；胡二爷带着货担坐第三排。"
+  "why": "沈知微 comes into the cabin afterwards and is absent at the opening; 胡二爷 sits in the third row with his load."
 }
 ```
 
-`cast` 是 `seed` 搬来的，不改；`places` 里每个出场人物正好一条。字段的完整说明见 `schema.md`。
+`cast` is carried over by `seed` and not changed; `places` has exactly one entry for each person who appears. For the full description of the fields see `schema.md`.

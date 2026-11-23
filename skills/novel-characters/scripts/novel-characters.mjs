@@ -11,10 +11,11 @@ import { fileURLToPath } from 'node:url';
 /* chunk                                                               */
 /* ------------------------------------------------------------------ */
 
-// 块大小的权衡：块越大，单块阅读越重；块越小，块数越多，跨块归并
-// （全管线语义最难的一步）的接缝就越多。现在的模型读 4 万字符毫无压力，
-// 所以往大取——接缝少三倍，漏归并的机会也少三倍。
-// 上限 24 块，扣掉 23 段重叠净覆盖约 93 万字符。
+// Chunk-size trade-off: the bigger the chunk, the heavier a single read; the smaller the chunk,
+// the more chunks, and the more seams for cross-chunk merging (the hardest semantic step in the
+// pipeline). Current models read 40k characters with no trouble, so lean large — three times fewer
+// seams means three times fewer missed merges.
+// Capped at 24 chunks; after 23 overlaps that is a net coverage of about 930k characters.
 export const CHUNK_SIZE = 40_000;
 export const CHUNK_OVERLAP = 1_200;
 export const MAX_CHUNKS = 24;
@@ -104,11 +105,12 @@ export function mergeRoster(batches) {
 }
 
 /**
- * 疑似同人候选。跨块身份消解是语义问题，确定性代码只能做廉价的那一半：
- * 名字包含（「陆」⊂「陆行远」）是很强的合并信号，精确匹配却收敛不了它——
- * 除非某块恰好把「陆」列成了「陆行远」的别名。「陆先生」和「行远」是不是
- * 同一个人则连包含都测不出，所以候选只是嫌疑名单，判断留给模型，
- * 复核结果写成 merges.json 再用 --apply 确定性落地。
+ * Suspected same-person candidates. Cross-chunk identity resolution is a semantic problem, and
+ * deterministic code can only do the cheap half: name containment (「陆」⊂「陆行远」) is a strong
+ * merge signal that exact matching cannot converge — unless some chunk happens to list 「陆」 as an
+ * alias of 「陆行远」. Whether 「陆先生」 and 「行远」 are the same person cannot even be detected by
+ * containment, so candidates are only a suspect list and the judgement is left to the model; the
+ * reviewed result is written to merges.json and applied deterministically with --apply.
  */
 export function mergeCandidates(cast) {
   const keysOf = (c) => [c.name, ...(c.aliases ?? [])].map((s) => String(s).trim()).filter(Boolean);
@@ -119,8 +121,8 @@ export function mergeCandidates(cast) {
       for (const a of keysOf(cast[i])) {
         for (const b of keysOf(cast[j])) {
           const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-          if (short.toLowerCase() === long.toLowerCase()) continue; // 相等的键 mergeRoster 已经收敛了
-          // 拉丁文字短侧至少 3 个字符，否则「Al」⊂「Alex」这类噪音太多；CJK 单字就有信息量
+          if (short.toLowerCase() === long.toLowerCase()) continue; // equal keys are already converged by mergeRoster
+          // For Latin script the short side needs at least 3 characters, or noise like 「Al」⊂「Alex」 overwhelms; a single CJK character already carries information
           const min = CJK.test(short) ? 1 : 3;
           if (short.length >= min && long.toLowerCase().includes(short.toLowerCase())) {
             reason = `「${short}」⊂「${long}」`;
@@ -136,10 +138,10 @@ export function mergeCandidates(cast) {
 }
 
 /**
- * 把模型复核后的合并决定落地。merges: [{ keep, absorb: [...] }]，
- * keep / absorb 用 name 或任一 alias 定位都行。找不到就整体报错——
- * 静默跳过会让调用方以为合并成功了。
- * 不改动传入的 cast：全程在副本上操作，抛错后入参照常可用。
+ * Apply the merge decisions the model has reviewed. merges: [{ keep, absorb: [...] }],
+ * where keep / absorb may locate by name or any alias. If anything cannot be found, fail outright —
+ * skipping silently would let the caller believe the merge succeeded.
+ * Does not mutate the incoming cast: everything runs on copies, so the input stays usable after a throw.
  */
 export function applyMerges(cast, merges) {
   cast = cast.map((c) => ({ ...c, aliases: [...c.aliases], notes: [...c.notes], quotes: [...c.quotes] }));
@@ -152,16 +154,16 @@ export function applyMerges(cast, merges) {
   for (const m of merges ?? []) {
     const target = index.get(keyOf(m?.keep ?? ''));
     if (!target) {
-      problems.push(`keep「${m?.keep}」在归并结果里找不到`);
+      problems.push(`keep「${m?.keep}」not found in the merge result`);
       continue;
     }
     for (const name of m?.absorb ?? []) {
       const victim = index.get(keyOf(name));
       if (!victim) {
-        problems.push(`absorb「${name}」在归并结果里找不到`);
+        problems.push(`absorb「${name}」not found in the merge result`);
         continue;
       }
-      if (victim === target) continue; // 本来就是同一个人，不算错
+      if (victim === target) continue; // already the same person, not an error
       for (const alias of [victim.name, ...victim.aliases]) {
         if (alias !== target.name && !target.aliases.includes(alias)) target.aliases.push(alias);
       }
@@ -192,9 +194,10 @@ export function slug(name) {
 /* i18n                                                                */
 /* ------------------------------------------------------------------ */
 /*
- * 报告语言。默认 zh。
- * 内置 zh / en 两套界面文案；给了其他语言码就用 en 的界面骨架，
- * 但角色内容仍按那个语言生成——界面词没翻译总比整篇乱掉强。
+ * Report language. Chinese by default.
+ * Two UI string sets are built in, zh / en; given any other language code it uses the en UI
+ * skeleton, but the character content is still generated in that language — untranslated UI words
+ * beat a whole report that has gone wrong.
  */
 
 export const DEFAULT_LANG = 'zh';
@@ -357,22 +360,23 @@ const STRINGS = {
 };
 
 /**
- * 取界面文案。
+ * Fetch the UI strings.
  *
- * 两层：内置表覆盖常用语言；其他语言由 skill 在生成时翻译一份塞进
- * cast.json 的 `ui`，这里合并进来。这样支持的语言不受内置表限制。
+ * Two layers: the built-in table covers common languages; for others the skill translates a copy at
+ * generation time and puts it into `ui` in cast.json, merged in here. That is how supported languages
+ * are not limited by the built-in table.
  *
- * @param lang      语言码
- * @param overrides cast.json 的 `ui`，可以只覆盖一部分键
+ * @param lang      language code
+ * @param overrides cast.json's `ui`, may override only some of the keys
  */
 export function strings(lang = DEFAULT_LANG, overrides = null) {
   const base = STRINGS[lang] ?? STRINGS.en;
   if (!overrides || typeof overrides !== 'object') return base;
 
-  // 只合两层——STRINGS 的嵌套就两层深，够用且不会被脏数据带偏。
+  // Merge only two layers — STRINGS is only two levels deep, which is enough and keeps dirty data from skewing it.
   const merged = { ...base };
   for (const [k, v] of Object.entries(overrides)) {
-    if (typeof base[k] === 'function') continue; // 函数模板不接受覆盖
+    if (typeof base[k] === 'function') continue; // function templates do not accept overrides
     if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object') {
       merged[k] = { ...base[k], ...v };
     } else if (typeof v === 'string') {
@@ -384,10 +388,10 @@ export function strings(lang = DEFAULT_LANG, overrides = null) {
 
 export const SUPPORTED_UI_LANGS = Object.keys(STRINGS);
 
-/** 需要 skill 补一份 `ui` 翻译的语言（内置表里没有的）。 */
+/** Languages that need the skill to supply a `ui` translation (not in the built-in table). */
 export const needsUiTranslation = (lang) => !SUPPORTED_UI_LANGS.includes(lang);
 
-/** `ui` 里可覆盖的键——供 ui-template 子命令生成骨架。 */
+/** The keys that `ui` can override — used by the ui-template subcommand to generate a skeleton. */
 export function uiTemplate() {
   const en = STRINGS.en;
   const out = {};
@@ -399,30 +403,33 @@ export function uiTemplate() {
 }
 
 /* ------------------------------------------------------------------ */
-/* seed — 从大纲预填角色表骨架                                          */
+/* seed — prefill the cast skeleton from an outline                       */
 /* ------------------------------------------------------------------ */
 
 /**
- * outline 的 tier 映射成 cast 的 importance。
+ * Map outline tier onto cast importance.
  *
- * 注意两边粒度不一样：outline 的 `lead` 是「主角组」，男女主与主反派都在里面，
- * 对应 cast 的 protagonist 与 major 两档。这里一律给 protagonist，由模型照
- * seedNote 里的 role（女主 / 男主 / 反派）把主角之外的改成 major——**分档本身
- * 不推翻，只在主角组内部细分**。
+ * Note the granularity differs: the outline's `lead` is the "lead group", containing the male lead,
+ * female lead and main antagonist, which corresponds to both the protagonist and major tiers in cast.
+ * Here everyone gets protagonist, and the model uses the role in seedNote (female lead / male lead /
+ * villain) to demote the non-leads to major — **the tiers themselves are not overturned, only
+ * subdivided within the lead group**.
  */
 export const TIER_TO_IMPORTANCE = { lead: 'protagonist', support: 'supporting', functional: 'minor' };
 
 /**
- * 从 outline.json 预填 cast.json 骨架。
+ * Prefill the cast.json skeleton from outline.json.
  *
- * 大纲是角色设定的上游：谁进谁不进、谁是主角组，在改编阶段就拍板了，这一层
- * 不再判断一遍。搬过来的是**大纲已经定死的事实**（角色码、名字、分档、人物线、
- * 由原著的谁合并而来），留空的是**这一层才该做的设计**（别名、画像、形象提示词、
- * 音色提示词）——别名要读原文才知道，大纲里没有。
+ * The outline is upstream of the character design: who is in and who is out, and who is in the lead
+ * group, are settled at the adaptation stage, and this layer does not judge it again. What is carried
+ * over is **the facts the outline already fixed** (character code, name, tier, character arc, which
+ * source characters were merged into this one); what is left blank is **the design this layer owes**
+ * (aliases, profile, image prompt, voice prompt) — aliases require reading the source, which the
+ * outline does not have.
  *
- * 与 novel-art / novel-script 的 seedFromOutline 同一个形状：搬事实、留设计、
- * 附一条 seedNote 带上下文。产出是骨架不是成品，直接跑 validate 会报一堆
- * 字段缺失，那是预期的。
+ * The same shape as seedFromOutline in novel-art / novel-script: carry the facts, leave the design,
+ * attach a seedNote for context. The output is a skeleton, not a finished product; running validate
+ * straight away reports a pile of missing fields, and that is expected.
  */
 export function seedFromOutline(outline) {
   const characters = (outline?.characters ?? []).map((c) => {
@@ -433,17 +440,17 @@ export function seedFromOutline(outline) {
       (c?.from ?? []).length ? `合并自：${(c.from ?? []).join('、')}` : null,
     ].filter(Boolean).join('　');
     return {
-      // 从大纲搬来的事实，不用再想
+      // facts carried over from the outline, no need to rethink them
       ...(c?.id ? { id: c.id } : {}),
       name: c?.name ?? '',
       importance: TIER_TO_IMPORTANCE[c?.tier] ?? 'supporting',
-      // 这一层才该做的设计，先占位
+      // the design this layer owes, placeholder for now
       aliases: [],
       oneLiner: '',
       persona: {
         gender: '', ageRange: '', identity: '', appearance: '',
         personality: [], temperament: '', motivation: '',
-        // 人物弧光大纲已经写了，直接用；觉得不对回去改大纲，别在这里改一个不一样的
+        // the character arc is already written by the outline, use it as-is; if it looks wrong go fix the outline, do not write a different one here
         arc: c?.arc ?? '',
         relationships: [], evidence: [],
       },
@@ -465,23 +472,23 @@ export function seedFromOutline(outline) {
 /* ------------------------------------------------------------------ */
 
 const IMPORTANCE = ['protagonist', 'major', 'supporting', 'minor'];
-/** 中日韩表意文字与假名、谚文——图像/TTS 提示词里出现就说明串语言了。 */
+/** CJK ideographs plus kana and hangul — if any appear in an image / TTS prompt, the languages have crossed. */
 const CJK = /[㐀-鿿぀-ヿ가-힯]/;
-/** 假名单独一条：用来把日文和中文区分开。 */
+/** Kana on its own: used to tell Japanese apart from Chinese. */
 const KANA = /[぀-ヿ]/;
 
 const PERSONA_STRINGS = ['gender', 'ageRange', 'identity', 'appearance', 'temperament', 'motivation', 'arc'];
-/** 机器输入，永远英文——图像和 TTS 引擎都吃英文最稳，跟报告语言无关。 */
+/** Machine input, always English — image and TTS engines are steadiest with English, regardless of report language. */
 const MACHINE_FIELDS = { image: ['prompt', 'negativePrompt', 'sheet'], voice: ['prompt'] };
-/** 给人读的，跟随报告语言。 */
+/** For humans, follows the report language. */
 const HUMAN_VOICE_FIELDS = ['timbre', 'pitch', 'pace', 'accent', 'emotion', 'referenceHint'];
 
 const normalise = (s) => String(s).replace(/\s+/g, '');
 
 /**
- * @param characters 角色卡数组
- * @param sourceText 原文；null 则跳过逐字引文校验
- * @param lang       报告语言，决定人类可读字段该是什么语言
+ * @param characters array of character cards
+ * @param sourceText the source; null skips the verbatim-quote check
+ * @param lang       report language, deciding what language the human-readable fields should be in
  */
 export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
   const problems = [];
@@ -489,21 +496,23 @@ export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
   const at = (name, msg) => problems.push(`[${name}] ${msg}`);
 
   if (!Array.isArray(characters) || characters.length === 0) {
-    return ['cast 为空或不是数组'];
+    return ['cast is empty or not an array'];
   }
 
-  // --- 同批角色的提示词不许雷同 ---
+  // --- prompts of characters in the same batch must not be near-duplicates ---
   /*
-   * profile-pass.md 早就写着「同一批角色之间要能区分开，别把长相和声线做成一个样」，
-   * 但没有门。模型第二趟出卡时容易套同一个模板：个体描述写得短，剩下全是真实感样板
-   * 与固定的构图光照尾巴——两个年龄性别接近的角色出来就是同一个人（issue #9）。
+   * profile-pass.md has long said "characters in the same batch must be distinguishable, do not make
+   * their looks and voices the same", but there was no gate. On pass 2 the model easily falls into one
+   * template: short individual description, with the rest all photorealism boilerplate and a fixed
+   * composition-and-lighting tail — two characters of similar age and gender come out as the same person (issue #9).
    *
-   * 判定：按词集合算 Jaccard 相似度，超阈值就点名那一对。
-   * 阈值取 0.75，是量出来的不是拍的——自带样例四个角色两两最高 39%，
-   * 而「只改年龄与衣服颜色」的雷同用例是 98%，中间余量极大。
+   * Rule: compute Jaccard similarity over word sets, and name the pair once it crosses the threshold.
+   * The 0.75 threshold is measured, not picked — the four bundled characters peak at 39% pairwise,
+   * while the near-duplicate case that "only changes age and clothing colour" is 98%, leaving plenty of headroom.
    *
-   * image.sheet 刻意不查：三分区排版规范是大段固定文本，真实角色之间本来就有 63%
-   * 重合，设门必然误拦——误拦的门比没有门更糟。
+   * image.sheet is deliberately not checked: the three-zone layout spec is a long fixed block, and real
+   * characters genuinely overlap 63%, so a gate would necessarily false-positive — a gate that blocks
+   * wrongly is worse than no gate.
    */
   const promptSim = (a, b) => {
     const words = (s) => new Set(String(s ?? '').toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2));
@@ -513,7 +522,7 @@ export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
     return inter / new Set([...A, ...B]).size;
   };
   const SIM_MAX = 0.75;
-  for (const [field, label] of [['prompt', '出图提示词'], ['voice', '音色提示词']]) {
+  for (const [field, label] of [['prompt', 'image prompt'], ['voice', 'voice prompt']]) {
     const get = (c) => (field === 'prompt' ? c?.image?.prompt : c?.voice?.prompt);
     for (let i = 0; i < characters.length; i += 1) {
       for (let j = i + 1; j < characters.length; j += 1) {
@@ -521,8 +530,8 @@ export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
         if (sim >= SIM_MAX) {
           const pct = Math.round(sim * 100);
           problems.push(
-            `${characters[i]?.name ?? '(无名)'} 与 ${characters[j]?.name ?? '(无名)'} 的${label}雷同 ${pct}%`
-            + `（上限 ${Math.round(SIM_MAX * 100)}%）——同一批角色要能区分开，别套同一个模板`,
+            `${characters[i]?.name ?? '(unnamed)'} and ${characters[j]?.name ?? '(unnamed)'} have near-duplicate ${label}s at ${pct}%`
+            + ` (cap ${Math.round(SIM_MAX * 100)}%) — characters in the same batch must be distinguishable; do not copy one template`,
           );
         }
       }
@@ -530,87 +539,90 @@ export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
   }
 
   for (const c of characters) {
-    const name = c?.name ?? '(无名)';
+    const name = c?.name ?? '(unnamed)';
 
-    // --- 结构 ---
-    if (typeof c?.name !== 'string' || !c.name.trim()) at(name, '缺少 name');
-    if (!Array.isArray(c?.aliases)) at(name, 'aliases 必须是数组');
+    // --- structure ---
+    if (typeof c?.name !== 'string' || !c.name.trim()) at(name, 'missing name');
+    if (!Array.isArray(c?.aliases)) at(name, 'aliases must be an array');
     if (!IMPORTANCE.includes(c?.importance)) {
-      at(name, `importance 必须是 ${IMPORTANCE.join('/')}，实际是 ${JSON.stringify(c?.importance)}`);
+      at(name, `importance must be one of ${IMPORTANCE.join('/')}, got ${JSON.stringify(c?.importance)}`);
     }
-    if (typeof c?.oneLiner !== 'string' || !c.oneLiner.trim()) at(name, '缺少 oneLiner');
+    if (typeof c?.oneLiner !== 'string' || !c.oneLiner.trim()) at(name, 'missing oneLiner');
 
     const persona = c?.persona;
     if (!persona || typeof persona !== 'object') {
-      at(name, '缺少 persona');
+      at(name, 'missing persona');
     } else {
       for (const f of PERSONA_STRINGS) {
-        if (typeof persona[f] !== 'string' || !persona[f].trim()) at(name, `persona.${f} 缺失或为空`);
+        if (typeof persona[f] !== 'string' || !persona[f].trim()) at(name, `persona.${f} is missing or empty`);
       }
-      if (!Array.isArray(persona.personality)) at(name, 'persona.personality 必须是数组');
-      if (!Array.isArray(persona.relationships)) at(name, 'persona.relationships 必须是数组');
-      if (!Array.isArray(persona.evidence)) at(name, 'persona.evidence 必须是数组');
+      if (!Array.isArray(persona.personality)) at(name, 'persona.personality must be an array');
+      if (!Array.isArray(persona.relationships)) at(name, 'persona.relationships must be an array');
+      if (!Array.isArray(persona.evidence)) at(name, 'persona.evidence must be an array');
     }
 
     const image = c?.image;
     if (!image || typeof image !== 'object') {
-      at(name, '缺少 image');
+      at(name, 'missing image');
     } else {
       for (const f of ['prompt', 'negativePrompt']) {
-        if (typeof image[f] !== 'string' || !image[f].trim()) at(name, `image.${f} 缺失或为空`);
+        if (typeof image[f] !== 'string' || !image[f].trim()) at(name, `image.${f} is missing or empty`);
       }
       if (typeof image.sheet !== 'string' || !image.sheet.trim()) {
-        at(name, 'image.sheet 缺失或为空（角色设定图提示词）');
+        at(name, 'image.sheet is missing or empty (the character model sheet prompt)');
       }
-      if (!Array.isArray(image.tags)) at(name, 'image.tags 必须是数组');
+      if (!Array.isArray(image.tags)) at(name, 'image.tags must be an array');
     }
 
     const voice = c?.voice;
     if (!voice || typeof voice !== 'object') {
-      at(name, '缺少 voice');
+      at(name, 'missing voice');
     } else {
       for (const f of [...HUMAN_VOICE_FIELDS, 'prompt']) {
-        if (typeof voice[f] !== 'string' || !voice[f].trim()) at(name, `voice.${f} 缺失或为空`);
+        if (typeof voice[f] !== 'string' || !voice[f].trim()) at(name, `voice.${f} is missing or empty`);
       }
       /*
-       * 音色提示词里不许出现引号包起来的台词。
-       * profile-pass.md 第 7 条写着「描述乐器本身，不是某一句台词的演绎」，
-       * 但模型会写出「杀意藏在『规矩就是规矩』这类客套话里」这种句子——
-       * 台词一进去，有些 TTS 引擎会把它当成要朗读的内容（生产里踩过）。
-       * 只查成对的引号，判定干净：正常的音色描述不需要引任何一句话。
+       * The voice prompt must not contain quoted dialogue.
+       * profile-pass.md rule 7 says "describe the instrument itself, not a performance of one line",
+       * but the model writes sentences like "murderous intent hidden inside pleasantries such as
+       * 'rules are rules'" — once dialogue goes in, some TTS engines treat it as text to be read aloud
+       * (hit in production). Only paired quotes are checked, which is cleanly decidable: a normal voice
+       * description never needs to quote a sentence.
        */
       /*
-       * 音色提示词要紧凑，不要散文。
-       * voice design 引擎（Qwen3-TTS Voice Design / ElevenLabs / MiniMax）吃的是
-       * 参数密度：年龄性别、音色、音区、共鸣、动态、音量、语速、语调、口音、默认情绪。
-       * 写成流畅的英文散文会把这些参数稀释掉——生产里实测对比过，紧凑版明显更好。
+       * The voice prompt must be compact, not prose.
+       * Voice design engines (Qwen3-TTS Voice Design / ElevenLabs / MiniMax) want parameter density:
+       * age and gender, timbre, register, resonance, dynamics, volume, pace, intonation, accent, default
+       * emotion. Flowing English prose dilutes those parameters — measured in production, the compact
+       * version is clearly better.
        *
-       * 上限 400 字符是量出来的：自带样例四个角色 218–245，而被实测判为过冗余的
-       * 散文版是 490–514，中间余量很大。它拦的是「写成小作文」，不是「写得细」。
+       * The 400-character cap is measured: the four bundled characters run 218–245, while the prose
+       * version judged over-redundant ran 490–514, so there is plenty of headroom. It blocks "writing an
+       * essay", not "writing in detail".
        */
       if (typeof voice.prompt === 'string' && voice.prompt.length > 400) {
-        at(name, `voice.prompt ${voice.prompt.length} 字符，超过 400——音色提示词要紧凑的参数串，不是散文；参数写全但别铺陈`);
+        at(name, `voice.prompt is ${voice.prompt.length} characters, over 400 — a voice prompt should be a compact parameter string, not prose; include every parameter but do not sprawl`);
       }
       if (typeof voice.prompt === 'string') {
         const quoted = voice.prompt.match(/[「『"“][^」』"”]{2,}[」』"”]/);
         if (quoted) {
-          at(name, `voice.prompt 里出现了引号台词「${quoted[0].slice(0, 24)}」——音色提示词描述的是嗓子本身，不是某一句台词的演绎`);
+          at(name, `voice.prompt contains quoted dialogue「${quoted[0].slice(0, 24)}」— a voice prompt describes the voice itself, not a performance of one line`);
         }
       }
     }
 
-    // --- 引文必须逐字 ---
+    // --- quotes must be verbatim ---
     if (flatSource && Array.isArray(persona?.evidence)) {
       for (const quote of persona.evidence) {
         if (typeof quote !== 'string') {
-          at(name, 'persona.evidence 里有非字符串');
+          at(name, 'persona.evidence contains a non-string');
         } else if (!flatSource.includes(normalise(quote))) {
-          at(name, `引文不是原文逐字片段：${quote}`);
+          at(name, `quote is not a verbatim passage from the source: ${quote}`);
         }
       }
     }
 
-    // --- 出图提示词不许出现人名 ---
+    // --- image prompts must not contain character names ---
     if (image) {
       const names = [c?.name, ...(Array.isArray(c?.aliases) ? c.aliases : [])].filter(
         (n) => typeof n === 'string' && n.trim(),
@@ -619,38 +631,38 @@ export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
         const value = image[field];
         if (typeof value !== 'string') continue;
         for (const n of names) {
-          if (value.includes(n)) at(name, `image.${field} 里出现了人名「${n}」`);
+          if (value.includes(n)) at(name, `image.${field} contains the character name「${n}」`);
         }
       }
     }
 
-    // --- 语言分工 ---
-    // 机器字段永远英文；人类字段跟随报告语言。
-    // 只有 zh / en 能可靠自动判别，其他语言不猜、跳过。
+    // --- language split ---
+    // Machine fields are always English; human fields follow the report language.
+    // Only zh / en can be reliably auto-detected; other languages are not guessed at and are skipped.
     for (const [group, fields] of Object.entries(MACHINE_FIELDS)) {
       const obj = c?.[group];
       if (!obj) continue;
       for (const f of fields) {
         if (typeof obj[f] === 'string' && CJK.test(obj[f])) {
-          at(name, `${group}.${f} 是喂给模型的，必须英文，但含中日韩字符`);
+          at(name, `${group}.${f} is fed to a model and must be English, but contains CJK characters`);
         }
       }
     }
     if (Array.isArray(image?.tags)) {
       for (const t of image.tags) {
-        if (typeof t === 'string' && CJK.test(t)) at(name, `image.tags 必须英文，但「${t}」含中日韩字符`);
+        if (typeof t === 'string' && CJK.test(t)) at(name, `image.tags must be English, but「${t}」contains CJK characters`);
       }
     }
-    // 只有这三种能可靠自动判别，其他语言不猜、跳过——误报比漏报更烦人。
+    // Only these three can be reliably auto-detected; other languages are not guessed at and are skipped — a false positive is more annoying than a miss.
     if (voice) {
       for (const f of HUMAN_VOICE_FIELDS) {
         const v = voice[f];
         if (typeof v !== 'string' || !v.trim()) continue;
-        if (lang === 'en' && CJK.test(v)) at(name, `voice.${f} 应为英文，但含中日韩字符`);
-        if (lang === 'zh' && !CJK.test(v)) at(name, `voice.${f} 应为中文，实际是「${v}」`);
-        if (lang === 'zh' && KANA.test(v)) at(name, `voice.${f} 应为中文，但含日文假名`);
+        if (lang === 'en' && CJK.test(v)) at(name, `voice.${f} should be English, but contains CJK characters`);
+        if (lang === 'zh' && !CJK.test(v)) at(name, `voice.${f} should be Chinese, but is「${v}」`);
+        if (lang === 'zh' && KANA.test(v)) at(name, `voice.${f} should be Chinese, but contains Japanese kana`);
         if (lang === 'ja' && !KANA.test(v) && !CJK.test(v)) {
-          at(name, `voice.${f} 应为日文，实际是「${v}」`);
+          at(name, `voice.${f} should be Japanese, but is「${v}」`);
         }
       }
     }
@@ -664,20 +676,22 @@ export function validateCast(characters, sourceText, lang = DEFAULT_LANG) {
 /* ------------------------------------------------------------------ */
 
 /**
- * 把第二趟的角色卡合成 cast.json 的顶层结构。纯机械活——之前留给模型
- * 手拼，手拼会丢字段、写错顶层键。
+ * Combine the pass-2 character cards into the top-level structure of cast.json. Pure mechanical work —
+ * this used to be left to the model to hand-build, and hand-building drops fields and writes the wrong
+ * top-level key.
  *
- * 排序：importance 分档，同档按 order（merge 输出的名字顺序，即戏份
- * 顺序）。不给 order 就保持传入顺序——CLI 按文件名读卡，那是 slug
- * 字典序不是戏份序，所以报告要「按戏份排序」就必须给 order。
+ * Sorting: by importance tier, and within a tier by order (the name order from merge's output, i.e.
+ * screen-time order). Without order it keeps the incoming order — the CLI reads cards by filename, which
+ * is slug lexicographic order rather than screen-time order, so a report that is "sorted by screen time"
+ * must be given order.
  */
 export function assembleCast(cards, { source, lang = DEFAULT_LANG, summary = '', ui = null, order = null } = {}) {
   const rank = (c) => {
     const i = IMPORTANCE.indexOf(c?.importance);
-    return i < 0 ? IMPORTANCE.length : i; // 越界的排最后，让 validate 去报，这里不崩
+    return i < 0 ? IMPORTANCE.length : i; // out-of-range sorts last, let validate report it; do not crash here
   };
   const orderIndex = new Map((order ?? []).map((name, i) => [String(name).trim().toLowerCase(), i]));
-  // 不在 order 里的排到同档末尾（保持传入顺序），不报错——卡是从 merge 结果生成的，正常对得上
+  // Names not in order sort to the end of their tier (keeping the incoming order) without error — cards are generated from merge's output, so they normally line up
   const byOrder = (c) => orderIndex.get(String(c?.name ?? '').trim().toLowerCase()) ?? orderIndex.size;
   const characters = cards
     .map((card, i) => [card, i])
@@ -748,11 +762,11 @@ export function renderMarkdown(characters, source, summary = '', lang = DEFAULT_
 /* render — html                                                       */
 /* ------------------------------------------------------------------ */
 /*
- * 三栏工作台。设计约定见 references/report-style.md。不能破的：
- *   1. 双字域：衬线=叙事与原文，无衬线=分析，等宽=喂给机器的提示词
- *   2. 「（推断）」自动高亮，让读者一眼分清有据和补全
- *   3. 一次只看一个角色，靠左栏切换 + 顶栏搜索找人
- *   4. 打印时全部展开——屏幕上一次一个，纸上要是完整的一份
+ * Three-column workbench. For design conventions see references/report-style.md. What must not break:
+ *   1. Two type domains: serif = narrative and source, sans = analysis, mono = prompts fed to machines
+ *   2. "（推断）" / "(inferred)" highlights automatically, so the reader can tell grounded from filled-in at a glance
+ *   3. One character at a time, switching via the left rail + finding people via the top-bar search
+ *   4. Everything expands when printing — one at a time on screen, a complete copy on paper
  */
 
 const esc = (s) =>
@@ -762,13 +776,13 @@ const esc = (s) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-/** 推断标记：半角/全角 × 中英四种写法都要认，模型不挑食地乱产。 */
+/** Inferred marker: all four spellings — half-width / full-width × Chinese / English — must be recognised, since the model produces them indiscriminately. */
 const INFERRED = /（\s*(?:推断|inferred)[^）]*）|\(\s*(?:推断|inferred)[^)]*\)/gi;
 const marked = (s) => esc(s).replace(INFERRED, (m) => `<span class="inf">${m}</span>`);
 
 const IMPORTANCE_ORDER = ['protagonist', 'major', 'supporting', 'minor'];
 
-/** 左栏的一条角色。缩略图取设定图的左半边——那里正好是半身像。 */
+/** One character in the left rail. The thumbnail takes the left half of the sheet — that is exactly the bust portrait. */
 function renderRosterItem(c, index, t) {
   const meta = [c.persona?.gender, c.persona?.ageRange].filter(Boolean).join(' · ');
   const hay = [
@@ -908,23 +922,25 @@ function renderCharacter(c, index, t) {
 }
 
 /* ------------------------------------------------------------------ */
-/* render — 关系图谱                                                    */
+/* render — relationship map                                            */
 /* ------------------------------------------------------------------ */
 /*
- * 圆环布局 + 向心贝塞尔。位置在 Node 里算好直接写进内联 SVG，
- * 浏览器端只管高亮和跳转——报告要能离线双击打开，不许引任何库。
+ * Circular layout + inward Béziers. Positions are computed in Node and written straight into inline SVG;
+ * the browser side only handles highlighting and navigation — the report must open offline by double-click,
+ * so no libraries.
  */
 
-/** 节点大小按戏份分档，一眼能看出谁是主角。 */
+/** Node size tiers by screen time, so you can see who the leads are at a glance. */
 const NODE_R = { protagonist: 11, major: 9, supporting: 7, minor: 5.5 };
 const r1 = (n) => Math.round(n * 10) / 10;
 
 /**
- * 把 persona.relationships 解析成无向边。
+ * Resolve persona.relationships into undirected edges.
  *
- * 按**名字 + 别名**建索引：老周的关系里写「老伯」也要连到同一个节点，
- * 只按 name 匹配会把一半的边漏掉。同一对人的两条单向记述合并成一条边，
- * 两个方向的说法都留着。指向没做画像的人算 dangling——不画，但要报数。
+ * Indexed by **name + alias**: a relationship written as 「老伯」 in 老周's entry must still connect to
+ * the same node, and matching on name alone would miss half the edges. Two one-directional accounts of the
+ * same pair collapse into one edge, keeping both directions' wording. A link pointing at someone without a
+ * profile counts as dangling — not drawn, but counted.
  */
 export function buildGraph(characters) {
   const key = (s) => String(s).trim().toLowerCase();
@@ -956,7 +972,7 @@ export function buildGraph(characters) {
 function renderGraph(ordered, t) {
   const { edges, dangling } = buildGraph(ordered);
   const n = ordered.length;
-  // 半径跟人数走，四个人不必撑满一整张画布；两侧留 110 给名字
+  // Radius follows headcount — four people need not fill the whole canvas; 110 on each side reserved for names
   const R = Math.max(130, Math.min(260, 40 + n * 14));
   const side = Math.round((R + 110) * 2);
   const c0 = side / 2;
@@ -967,13 +983,13 @@ function renderGraph(ordered, t) {
     pos.set(c.name, { x: c0 + R * Math.cos(a), y: c0 + R * Math.sin(a), cos: Math.cos(a), sin: Math.sin(a) });
   });
 
-  // 控制点往圆心拉，弦是弯的——直线在人多时会糊成一团网
+  // Pull the control point toward the centre so chords are curved — straight lines blur into a net with many people
   const arcs = edges.map((e, i) => {
     const p = pos.get(e.a);
     const q = pos.get(e.b);
     const cxq = c0 + ((p.x + q.x) / 2 - c0) * 0.35;
     const cyq = c0 + ((p.y + q.y) / 2 - c0) * 0.35;
-    // 标签沿弦错位排：正对面的两条弦中点都在圆心，全放 t=0.5 会叠成一坨
+    // Offset labels along the chord: the two chords of characters facing each other both have their midpoint at the centre, so putting them all at t=0.5 piles them into one lump
     const t = 0.5 + ((i % 3) - 1) * 0.14;
     const u = 1 - t;
     return {
@@ -988,13 +1004,13 @@ function renderGraph(ordered, t) {
     .map((a) => `<path class="gedge" data-a="${esc(a.e.a)}" data-b="${esc(a.e.b)}" d="${a.d}"></path>`)
     .join('');
 
-  // 弦上的关系文字：取最短的一条说法截断，全文进 <title> 当原生 tooltip
+  // Relationship text on the chord: take the shortest wording and truncate it, with the full text in <title> as a native tooltip
   const labels = arcs
     .map((a) => {
       const notes = a.e.notes.filter((x) => x.text.trim());
       if (!notes.length) return '';
       const pick = notes.reduce((s, x) => ([...x.text].length < [...s.text].length ? x : s), notes[0]);
-      // 六个字。再长就压到隔壁那条弦上去了——全文在 title 和右侧关系表里
+      // Six characters. Any longer and it presses onto the neighbouring chord — the full text lives in title and the relationship table on the right
       const chars = [...pick.text.trim()];
       const text = chars.length > 6 ? `${chars.slice(0, 6).join('')}…` : chars.join('');
       const full = notes.map((x) => `${x.from} · ${x.text}`).join('\n');
@@ -1005,7 +1021,7 @@ function renderGraph(ordered, t) {
   const dots = ordered
     .map((c) => {
       const p = pos.get(c.name);
-      // 圆顶和圆底的名字居中放，两侧的往外甩，免得压在节点上
+      // Names at the top and bottom of the circle are centred; the ones on the sides are thrown outward so they do not sit on the node
       const flat = Math.abs(p.cos) < 0.25;
       const anchor = flat ? 'middle' : p.cos < 0 ? 'end' : 'start';
       const lx = c0 + (R + 15) * p.cos;
@@ -1027,7 +1043,7 @@ function renderGraph(ordered, t) {
     )
     .join('');
 
-  // 边少就直接把关系文字标上；边一多就糊成一团，默认收起来，开关留给用户
+  // Few edges: label the relationship text directly. Many edges: it blurs into a lump, so collapse by default and leave the toggle to the user
   const labelsOn = edges.length <= 14;
 
   return `<section class="graph${labelsOn ? ' labels' : ''}" id="graph">
@@ -1056,11 +1072,11 @@ function renderGraph(ordered, t) {
 }
 
 /*
- * 报告里内嵌的那份数据，形状**就是 cast.json**——编辑完能直接喂回
- * `render` 重新出报告，不另立一套导出格式。
+ * The data embedded in the report **is exactly the shape of cast.json** — edit it and feed it straight back
+ * into `render` to regenerate the report; there is no separate export format.
  *
- * `<` 转成 <：JSON 里 `<` 只可能出现在字符串值中，整体替换是安全的，
- * 而不转的话正文里一个 `</script` 就能把这个数据块提前截断。
+ * `<` becomes \u003c: in JSON, `<` can only occur inside string values, so a global replace is safe, and
+ * without it a single `</script` in the body could truncate this data block early.
  */
 function embedCast(characters, source, summary, lang, ui) {
   const data = { source, lang, summary, ...(ui ? { ui } : {}), characters };
@@ -1086,7 +1102,7 @@ export function renderHtml(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(t.docTitle(source))}</title>
 <style>
-/* 冷灰印张 + 铁锈红印记。红色只用在与原文有关的地方和当前选中态。 */
+/* Cold grey stock + rust-red seal. Red is used only where it relates to the source and for the current selection. */
 :root{
   --paper:#eceded; --panel:#f5f6f5; --side:#e4e6e3; --ink:#191d21; --ink-2:#5b636a; --ink-3:#8c9298;
   --rule:#d2d5d0; --rule-2:#c2c6bf; --seal:#8a3324; --seal-soft:#8a332412;
@@ -1102,7 +1118,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.7 var(--sans)
 h1,h2,h3,h4{margin:0;font-weight:400}
 button{font-family:inherit}
 
-/* ---------- 顶栏 ---------- */
+/* ---------- top bar ---------- */
 .top{position:sticky;top:0;z-index:20;height:var(--top);display:flex;align-items:center;gap:24px;
   padding:0 20px;background:var(--panel);border-bottom:1px solid var(--rule-2)}
 .brand{display:flex;align-items:baseline;gap:10px;flex:none}
@@ -1116,24 +1132,24 @@ button{font-family:inherit}
 .topmeta{margin-left:auto;font-size:12px;color:var(--ink-3);display:flex;align-items:center;
   gap:10px;flex:none}
 .topmeta i{font-style:normal;color:var(--rule-2)}
-/* 导出：下载的就是内嵌的那份 cast.json，编辑完能直接喂回 render */
+/* Export: what downloads is the embedded cast.json itself, ready to feed back into render */
 .expo{margin-left:4px;font:500 11px/1 var(--sans);color:var(--ink-2);background:var(--paper);
   border:1px solid var(--rule-2);border-radius:2px;padding:6px 10px;cursor:pointer;transition:.15s}
 .expo:hover{border-color:var(--seal);color:var(--seal)}
 .expo:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
 
-/* ---------- 骨架 ---------- */
+/* ---------- skeleton ---------- */
 .shell{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);align-items:start}
 @media(max-width:1080px){:root{--side-w:100%}.shell{grid-template-columns:1fr}}
 
-/* ---------- 左栏 ---------- */
+/* ---------- left rail ---------- */
 .side{position:sticky;top:var(--top);height:calc(100vh - var(--top));overflow-y:auto;
   background:var(--side);border-right:1px solid var(--rule-2)}
 @media(max-width:1080px){.side{position:static;height:auto}}
 .synopsis{padding:18px 20px;border-bottom:1px solid var(--rule)}
 .lbl{font:500 10px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3)}
 .synopsis p{margin:10px 0 0;font:400 14px/1.95 var(--serif)}
-/* 摘要默认三行，底部渐隐——左栏第一屏要留给角色列表。点一下展开，之后不再收起 */
+/* The summary is three lines by default with a fade at the bottom — the first screen of the left rail belongs to the character list. Click to expand, and it does not collapse again */
 .syn-clamp{cursor:pointer}
 .syn-clamp p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
   -webkit-mask-image:linear-gradient(180deg,#000 58%,transparent);
@@ -1151,9 +1167,9 @@ button{font-family:inherit}
 .rost:hover{background:#00000006}
 .rost.on{background:var(--panel);border-left-color:var(--seal)}
 .rost:focus-visible{outline:2px solid var(--seal);outline-offset:-2px}
-/* 缩略图 = 设定图的左栏切片。设定图固定 16:9、左栏占约 34%，
-   所以把整图按 1/0.34 ≈ 294% 放大再左上对齐，裁出来正好是半身像。
-   比 <img> + object-position 可控：不依赖浏览器怎么 cover。 */
+/* Thumbnail = the left-column slice of the sheet. The sheet is fixed 16:9 and the left column is about 34%,
+   so scaling the whole image by 1/0.34 ≈ 294% and aligning top-left crops out exactly the bust portrait.
+   More controllable than <img> + object-position: it does not depend on how the browser covers. */
 .rost-thumb{display:block;width:76px;height:76px;border:1px solid var(--rule-2);border-radius:6px;
   background:#fff no-repeat left top;background-size:294% auto}
 .rost-body{min-width:0}
@@ -1169,7 +1185,7 @@ button{font-family:inherit}
 .badge{font-size:11px;padding:1px 7px;border:1px solid var(--rule-2);border-radius:2px;color:var(--ink-2)}
 .rost.on .badge,.char-h .badge{border-color:var(--seal);color:var(--seal)}
 
-/* ---------- 主区 ---------- */
+/* ---------- main area ---------- */
 .main{padding:26px 28px 72px;min-width:0;max-width:1500px}
 .char{display:none}
 .char.on{display:block}
@@ -1184,13 +1200,13 @@ button{font-family:inherit}
 .upper{display:grid;grid-template-columns:minmax(0,1fr) 500px;gap:26px;align-items:start;margin-top:20px}
 @media(max-width:1240px){.upper{grid-template-columns:1fr}}
 
-/* 设定图是白底印张 */
+/* The sheet is white stock */
 .plate-wrap{position:relative;margin:0}
 .plate{display:block;width:100%;padding:0;background:#fff;border:1px solid var(--rule-2);
   border-radius:2px;overflow:hidden;cursor:zoom-in}
 .plate img{display:block;width:100%;height:auto}
 .plate:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
-/* 右下角浮在图上，hover 才明显——别挡住画面 */
+/* Floats over the image in the bottom-right corner, obvious only on hover — do not block the picture */
 .copy-img{position:absolute;right:10px;bottom:10px;font:500 11px/1 var(--sans);color:var(--ink-2);
   background:var(--paper);border:1px solid var(--rule-2);border-radius:3px;padding:6px 10px;
   cursor:pointer;opacity:.55;transition:.15s}
@@ -1199,7 +1215,7 @@ button{font-family:inherit}
 .copy-img:focus-visible{opacity:1;outline:2px solid var(--seal);outline-offset:2px}
 .copy-img[data-done]{border-color:var(--seal);color:var(--seal);opacity:1}
 
-/* 弹层 */
+/* Lightbox */
 .lightbox{position:fixed;inset:0;z-index:50;display:none;place-items:center;
   background:#191d21e6;padding:32px;cursor:zoom-out}
 .lightbox.on{display:grid}
@@ -1219,13 +1235,13 @@ button{font-family:inherit}
 .blk h3{font:500 11px/1 var(--sans);letter-spacing:.2em;color:var(--seal);margin-bottom:7px}
 .blk p{margin:0;font-size:13.5px;line-height:1.85}
 
-/* 原文：衬线体，铁锈红边栏。这里是书自己在说话 */
+/* Source text: serif, rust-red bar. This is the book itself speaking */
 .source .quotes{display:grid;grid-template-columns:1fr 1fr;gap:10px 30px}
 @media(max-width:700px){.source .quotes{grid-template-columns:1fr}}
 .source blockquote{margin:0;padding-left:13px;border-left:2px solid var(--seal);
   font:400 13.5px/1.85 var(--serif)}
 
-/* ---------- 右侧信息卡 ---------- */
+/* ---------- right-hand info card ---------- */
 .side-cards{display:flex;flex-direction:column;gap:14px}
 .card{border:1px solid var(--rule);border-radius:2px;background:var(--panel);padding:14px 16px}
 .card h4{font:500 11px/1 var(--sans);letter-spacing:.2em;color:var(--ink-3);margin-bottom:10px;
@@ -1240,7 +1256,7 @@ button{font-family:inherit}
 .tags li{font:400 11px/1.5 var(--mono);color:var(--ink-2);border:1px solid var(--rule-2);
   background:var(--paper);border-radius:2px;padding:1px 6px}
 
-/* ---------- 提示词 ---------- */
+/* ---------- prompts ---------- */
 .prompts{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}
 @media(max-width:900px){.prompts{grid-template-columns:1fr}}
 .pgroup{border:1px solid var(--rule);border-radius:2px;background:var(--panel);padding:6px 14px 10px}
@@ -1263,8 +1279,8 @@ button{font-family:inherit}
 .copy[data-done]{border-color:var(--seal);color:var(--seal)}
 .copy.wide{width:100%;padding:9px}
 
-/* ---------- 关系图谱 ---------- */
-/* 布局在 Node 里算好写进 SVG，这里只管高亮。红色仍然只给选中态 */
+/* ---------- relationship map ---------- */
+/* The layout is computed in Node and written into the SVG; here we only handle highlighting. Red is still reserved for the selected state */
 .gtoggle{display:flex;align-items:center;gap:9px;width:100%;padding:13px 20px;text-align:left;
   background:none;border:0;border-bottom:1px solid var(--rule);border-left:2px solid transparent;
   cursor:pointer;color:var(--ink-2);font:500 12px/1 var(--sans);letter-spacing:.1em}
@@ -1290,8 +1306,8 @@ button{font-family:inherit}
 .gedge.dim{opacity:.15}
 .gnode{cursor:pointer;transition:.15s}
 .gnode .gdot{fill:var(--paper);stroke:var(--ink-2);stroke-width:1.5}
-/* 看不见的命中区：节点本身才十来个像素，光标很难压准。
-   单独一个类，免得被下面 .lead / .hot 的规则一起染色 */
+/* Invisible hit area: the node itself is only ten-odd pixels, so the cursor rarely lands on it.
+   A separate class, so the .lead / .hot rules below do not stain it too */
 .gnode .ghit{fill:none;stroke:none;pointer-events:all}
 .gnode text{font:400 13px var(--serif);fill:var(--ink)}
 .gnode.lead .gdot{fill:var(--seal);stroke:var(--seal)}
@@ -1299,8 +1315,8 @@ button{font-family:inherit}
 .gnode.hot text{fill:var(--seal)}
 .gnode.dim{opacity:.22}
 .gnode:focus-visible{outline:2px solid var(--seal)}
-/* 弦上的关系文字。默认按边数决定开不开，悬停的那条永远显示。
-   paint-order + 同色描边 = 给字加一圈底衬，压在弦上也读得清 */
+/* Relationship text on the chords. Shown or hidden by default according to edge count, and the hovered one always shows.
+   paint-order + same-colour stroke = a backing ring around the glyphs, readable even over a chord */
 .glabel{display:none;font:400 9px var(--sans);fill:var(--ink-3);pointer-events:none;
   paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
 .graph.labels .glabel{display:block}
@@ -1327,7 +1343,7 @@ button{font-family:inherit}
 .grel-foot{margin:0;padding:11px 16px;border-top:1px solid var(--rule);
   font-size:11px;line-height:1.6;color:var(--ink-3)}
 
-/* 签名：推断标记 */
+/* Signature: inferred marker */
 .inf{color:var(--ink-3);font-size:.88em;background:var(--seal-soft);padding:0 3px;border-radius:2px}
 
 .nomatch{display:none;padding:20px;font-size:13px;color:var(--ink-3)}
@@ -1335,7 +1351,7 @@ button{font-family:inherit}
 
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* 屏幕上一次一个角色，纸上要完整 */
+/* One character at a time on screen, complete on paper */
 @media print{
   .top,.side,.copy{display:none!important}
   .shell{display:block}
@@ -1392,7 +1408,7 @@ button{font-family:inherit}
 <script>
 const L = ${JSON.stringify({ copied: t.copied, failed: t.copyFailed })};
 
-// 导出：报告自己就带着完整的 cast.json，下载的是它原样
+// Export: the report carries the complete cast.json itself, and downloads it as-is
 document.querySelector('.expo').addEventListener('click', (e) => {
   const btn = e.currentTarget;
   const url = URL.createObjectURL(
@@ -1400,11 +1416,11 @@ document.querySelector('.expo').addEventListener('click', (e) => {
   );
   const a = Object.assign(document.createElement('a'), { href: url, download: btn.dataset.name });
   a.click();
-  // 别在 click 之后立刻回收——Safari 上会抢在下载读完之前把 blob 撤掉，存出来是空文件
+  // Do not revoke immediately after click — on Safari it revokes the blob before the download has finished reading, saving an empty file
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 });
 
-// 左栏切换：一次只显示一个角色
+// Left-rail switching: show only one character at a time
 document.querySelector('.roster').addEventListener('click', (e) => {
   const btn = e.target.closest('.rost');
   if (!btn) return;
@@ -1414,7 +1430,7 @@ document.querySelector('.roster').addEventListener('click', (e) => {
   document.querySelector('.main').scrollIntoView({ block: 'start', behavior: 'smooth' });
 });
 
-// 关系图谱：一张全景视图，跟角色详情互斥
+// Relationship map: a panoramic view, mutually exclusive with character detail
 const gv = document.querySelector('.graph');
 const gbtn = document.querySelector('.gtoggle');
 function showGraph(on) {
@@ -1427,13 +1443,13 @@ gbtn.addEventListener('click', () => {
   document.querySelector('.main').scrollIntoView({ block: 'start', behavior: 'smooth' });
 });
 {
-  // 弦和弦上的文字共用 data-a/data-b，高亮逻辑完全一样，放一个数组里
+  // Chords and the text on them share data-a/data-b and the highlighting logic is identical, so they go in one array
   const edges = [...gv.querySelectorAll('.gedge, .glabel')];
   const nodes = [...gv.querySelectorAll('.gnode')];
   const rows = [...gv.querySelectorAll('.grow')];
   const clear = () => [...edges, ...nodes, ...rows].forEach((el) => el.classList.remove('hot', 'dim'));
 
-  // 悬停一个人：他的关系线亮起来，没关系的压到背景里
+  // Hover a person: their relationship lines light up, unrelated ones are pushed into the background
   const byNode = (name) => {
     const near = new Set([name]);
     for (const e of edges) {
@@ -1456,7 +1472,7 @@ gbtn.addEventListener('click', () => {
     }
   };
 
-  // 悬停关系表的一行：只亮那一条弦
+  // Hover a row of the relationship table: light up only that one chord
   const byEdge = (a, b) => {
     for (const e of edges) {
       const hot = e.dataset.a === a && e.dataset.b === b;
@@ -1480,7 +1496,7 @@ gbtn.addEventListener('click', () => {
     if (item) item.click();
   };
 
-  // 关系文字的总开关：人多的时候标签会盖住图，一键收起
+  // Master toggle for relationship text: with many people the labels cover the map, so collapse them in one click
   const glab = gv.querySelector('.glabtoggle');
   glab.addEventListener('click', () => {
     const on = !gv.classList.contains('labels');
@@ -1505,7 +1521,7 @@ gbtn.addEventListener('click', () => {
     const hit = e.target.closest('.gnode, .grow');
     if (hit) jump(hit);
   });
-  // SVG 的 <g> 不是原生按钮，回车/空格要自己接
+  // SVG <g> is not a native button; Enter/Space must be wired up by hand
   gv.addEventListener('keydown', (e) => {
     const nd = e.target.closest('.gnode');
     if (!nd || (e.key !== 'Enter' && e.key !== ' ')) return;
@@ -1514,7 +1530,7 @@ gbtn.addEventListener('click', () => {
   });
 }
 
-// 搜索：过滤左栏；结果只剩一个就直接切过去
+// Search: filter the left rail; when only one result is left, switch straight to it
 document.getElementById('q').addEventListener('input', (e) => {
   const q = e.target.value.trim().toLowerCase();
   let hits = [];
@@ -1527,7 +1543,7 @@ document.getElementById('q').addEventListener('input', (e) => {
   if (q && hits.length === 1) hits[0].click();
 });
 
-// 摘要默认三行，点一下展开全部；短到不需要折叠的就直接去掉折叠态
+// The summary is three lines by default; click to expand it fully, and short ones that need no collapsing drop the clamp entirely
 const syn = document.querySelector('.synopsis');
 if (syn) {
   const body = syn.querySelector('p');
@@ -1535,7 +1551,7 @@ if (syn) {
   syn.addEventListener('click', () => syn.classList.remove('syn-clamp'));
 }
 
-// 图片弹层
+// Image lightbox
 const lb = document.querySelector('.lightbox');
 const lbImg = lb.querySelector('img');
 function closeLb() { lb.classList.remove('on'); lbImg.removeAttribute('src'); }
@@ -1546,7 +1562,7 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLb(); });
 
-// 复制图片本身到剪贴板（不是路径）
+// Copy the image itself to the clipboard (not the path)
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.copy-img');
   if (!btn) return;
@@ -1555,7 +1571,7 @@ document.addEventListener('click', async (e) => {
   const label = btn.textContent;
   try {
     const blob = await (await fetch(btn.dataset.img)).blob();
-    // Safari 只认 image/png，其它格式先过一遍 canvas
+    // Safari only accepts image/png; transcode other formats through a canvas first
     let png = blob;
     if (blob.type !== 'image/png') {
       const bmp = await createImageBitmap(blob);
@@ -1594,46 +1610,46 @@ document.addEventListener('click', async (e) => {
 /* CLI                                                                 */
 /* ------------------------------------------------------------------ */
 
-const USAGE = `novel-characters.mjs — novel-characters skill 的确定性工具
+const USAGE = `novel-characters.mjs — deterministic helpers for the novel-characters skill
 
-  seed <outline.json>              从大纲预填角色表骨架（打印到 stdout，画像与提示词留空待填）
-  chunk <book.txt> <workdir>       段落感知重叠切块，写 chunk-NN.txt，打印块数
-  merge <workdir>                  归并 roster-*.json，打印 {characters, mergeCandidates}
-        [--apply merges.json]      落地复核后的合并决定：{"merges":[{"keep":…,"absorb":[…]}]}
-  assemble <workdir> --source <书名>
-        [--lang] [--out]           把 card-*.json + 故事摘要（+ 界面翻译）合成 cast.json
-        [--summary <file>]         故事摘要文件（默认 <workdir>/summary.txt）
-        [--ui <file>]              界面文案翻译（默认 <workdir>/ui.json，内置语言不需要）
-        [--order merged.json]      同档角色的戏份顺序（默认自动找 <workdir>/merged.json）
-  validate <cast.json> <book.txt>  校验；有违规逐条打印并 exit 1
-  render <cast.json> [--html|--md] 渲染报告到 stdout（默认 --md）
-  slug <name>                      角色名转安全文件名
-  ui-template [lang]               打印界面文案骨架，供翻译成内置表没有的语言
+  seed <outline.json>              prefill the cast skeleton from an outline (prints to stdout; profile and prompts left blank)
+  chunk <book.txt> <workdir>       paragraph-aware overlapping chunks, writes chunk-NN.txt, prints the chunk count
+  merge <workdir>                  merge roster-*.json, prints {characters, mergeCandidates}
+        [--apply merges.json]      apply the reviewed merge decisions: {"merges":[{"keep":…,"absorb":[…]}]}
+  assemble <workdir> --source <book name>
+        [--lang] [--out]           combine card-*.json + story summary (+ UI translation) into cast.json
+        [--summary <file>]         story summary file (default <workdir>/summary.txt)
+        [--ui <file>]              UI string translation (default <workdir>/ui.json; not needed for built-in languages)
+        [--order merged.json]      screen-time order within a tier (default: finds <workdir>/merged.json automatically)
+  validate <cast.json> <book.txt>  validate; prints each violation and exits 1
+  render <cast.json> [--html|--md] render the report to stdout (--md by default)
+  slug <name>                      turn a character name into a safe filename
+  ui-template [lang]               print the UI string skeleton, for translating into a language not in the built-in table
 
-通用选项：
-  --lang <code>     报告语言，默认取 cast.json 的 lang，再默认 ${DEFAULT_LANG}
-                    内置界面文案：${SUPPORTED_UI_LANGS.join(' / ')}；其他语言码用英文界面骨架
+Common options:
+  --lang <code>     report language, defaulting to cast.json's lang, then to ${DEFAULT_LANG}
+                    built-in UI strings: ${SUPPORTED_UI_LANGS.join(' / ')}; other language codes use the English skeleton
 
-render 选项：
-  --source <name>   报告标题用的书名（默认取 cast.json 的 source 或文件名）
-  --images <dir>    设定图所在目录，任意路径（相对当前目录解析）；默认 cast.json 同级的 images/
-                    会去找 <dir>/<slug>-sheet.png；报告里的图片路径按「报告写在 cast.json 旁边」计算`;
+render options:
+  --source <name>   book title for the report heading (default: cast.json's source, else the filename)
+  --images <dir>    directory holding the sheets, any path (resolved against the current directory); default images/ next to cast.json
+                    looks for <dir>/<slug>-sheet.png; image paths in the report assume "the report is written next to cast.json"`;
 
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(path), 'utf8'));
 }
 
-/** 取 --flag 的值，没有就返回 fallback。 */
+/** Read the value of --flag, returning fallback if absent. */
 function flag(rest, name, fallback = null) {
   const i = rest.indexOf(name);
   return i >= 0 && rest[i + 1] ? rest[i + 1] : fallback;
 }
 
-/** cast.json 可以是 {source, lang, summary, characters}，也可以是裸数组（旧格式）。 */
+/** cast.json may be {source, lang, summary, characters}, or a bare array (the old format). */
 function loadCast(path) {
   const raw = readJson(path);
   const characters = Array.isArray(raw) ? raw : raw.characters;
-  if (!Array.isArray(characters)) throw new Error(`${path} 里没有 characters 数组`);
+  if (!Array.isArray(characters)) throw new Error(`no characters array in ${path}`);
   return {
     characters,
     source: Array.isArray(raw) ? null : raw.source,
@@ -1653,14 +1669,14 @@ function main(argv) {
 
   if (cmd === 'seed') {
     const [path] = rest;
-    if (!path) throw new Error('用法：seed <outline.json>');
+    if (!path) throw new Error('usage: seed <outline.json>');
     console.log(JSON.stringify(seedFromOutline(readJson(path)), null, 2));
     return;
   }
 
   if (cmd === 'chunk') {
     const [book, workdir] = rest;
-    if (!book || !workdir) throw new Error('用法：chunk <book.txt> <workdir>');
+    if (!book || !workdir) throw new Error('usage: chunk <book.txt> <workdir>');
     const text = readFileSync(resolve(book), 'utf8');
     const chunks = chunkText(text);
     mkdirSync(resolve(workdir), { recursive: true });
@@ -1675,16 +1691,16 @@ function main(argv) {
         2,
       ),
     );
-    if (truncated) console.error(`⚠️ 文本超过 ${MAX_CHUNKS} 块上限，尾部未扫描`);
+    if (truncated) console.error(`⚠️ text exceeds the ${MAX_CHUNKS}-chunk cap; the tail was not scanned`);
     return;
   }
 
   if (cmd === 'merge') {
     const [workdir] = rest;
-    if (!workdir || workdir.startsWith('--')) throw new Error('用法：merge <workdir> [--apply merges.json]');
+    if (!workdir || workdir.startsWith('--')) throw new Error('usage: merge <workdir> [--apply merges.json]');
     const dir = resolve(workdir);
     const files = readdirSync(dir).filter((f) => /^roster-.*\.json$/.test(f)).sort();
-    if (!files.length) throw new Error(`${dir} 里没有 roster-*.json`);
+    if (!files.length) throw new Error(`no roster-*.json in ${dir}`);
     const batches = files.map((f) => {
       const raw = readJson(join(dir, f));
       return Array.isArray(raw) ? raw : (raw.characters ?? []);
@@ -1695,7 +1711,7 @@ function main(argv) {
       const raw = readJson(applyPath);
       cast = applyMerges(cast, Array.isArray(raw) ? raw : (raw.merges ?? []));
     }
-    // mergeCandidates 是嫌疑名单不是判决：由调用方复核后写 merges.json 再 --apply
+    // mergeCandidates is a suspect list, not a verdict: the caller reviews it, writes merges.json, then --apply
     console.log(JSON.stringify({ characters: cast, mergeCandidates: mergeCandidates(cast) }, null, 2));
     return;
   }
@@ -1703,17 +1719,17 @@ function main(argv) {
   if (cmd === 'assemble') {
     const [workdir] = rest;
     if (!workdir || workdir.startsWith('--')) {
-      throw new Error('用法：assemble <workdir> --source <书名> [--lang zh] [--out cast.json]');
+      throw new Error('usage: assemble <workdir> --source <book name> [--lang zh] [--out cast.json]');
     }
     const dir = resolve(workdir);
     const sourceName = flag(rest, '--source');
-    if (!sourceName) throw new Error('assemble 需要 --source <书名>');
+    if (!sourceName) throw new Error('assemble needs --source <book name>');
     const lang = flag(rest, '--lang', DEFAULT_LANG);
 
     const files = readdirSync(dir).filter((f) => /^card-.*\.json$/.test(f)).sort();
-    if (!files.length) throw new Error(`${dir} 里没有 card-*.json`);
+    if (!files.length) throw new Error(`no card-*.json in ${dir}`);
 
-    // 宽容解析：一份坏卡不废整批——逐个点名，重跑坏的那个角色就行
+    // Lenient parsing: one bad card does not spoil the batch — name them one by one and re-run just the bad character
     const problems = [];
     const cards = [];
     const seen = new Map();
@@ -1722,34 +1738,34 @@ function main(argv) {
       try {
         card = readJson(join(dir, f));
       } catch (error) {
-        problems.push(`${f} 不是合法 JSON（${error.message}）——重跑这个角色即可`);
+        problems.push(`${f} is not valid JSON (${error.message}) — re-run just this character`);
         continue;
       }
       if (!card || typeof card !== 'object' || Array.isArray(card) || !card.name) {
-        problems.push(`${f} 不是单张角色卡（缺 name）——重跑这个角色即可`);
+        problems.push(`${f} is not a single character card (no name) — re-run just this character`);
         continue;
       }
       if (seen.has(card.name)) {
-        problems.push(`「${card.name}」有两份卡（${seen.get(card.name)} 和 ${f}），删掉多余的那份`);
+        problems.push(`「${card.name}」has two cards (${seen.get(card.name)} and ${f}); delete the extra one`);
         continue;
       }
       seen.set(card.name, f);
       cards.push(card);
     }
 
-    // 三份附带文件都能单独指定路径；不给才去工作目录里找 skill 自己写下的那份
+    // All three side files can be given their own path; only when absent does it look in the work directory for the copy the skill wrote
     const summaryPath = resolve(flag(rest, '--summary', join(dir, 'summary.txt')));
     const summary = existsSync(summaryPath) ? readFileSync(summaryPath, 'utf8').trim() : '';
-    if (!summary) problems.push(`缺 ${summaryPath}（故事摘要）——用报告语言写 3–5 句进去，或用 --summary 指定`);
+    if (!summary) problems.push(`missing ${summaryPath} (story summary) — write 3–5 sentences in the report language, or pass --summary`);
 
     const uiPath = resolve(flag(rest, '--ui', join(dir, 'ui.json')));
     const ui = existsSync(uiPath) ? readJson(uiPath) : null;
     if (needsUiTranslation(lang) && !ui) {
-      problems.push(`lang=${lang} 不在内置界面语言里，缺 ${uiPath}——用 ui-template 生成骨架翻译后放进去，或用 --ui 指定`);
+      problems.push(`lang=${lang} is not a built-in UI language, and ${uiPath} is missing — generate a skeleton with ui-template, translate it, and put it there; or pass --ui`);
     }
 
-    // 同档角色的戏份顺序来自 merge 的输出——卡按文件名读入是 slug 字典序，
-    // 不给顺序的话「按戏份排序」就名存实亡
+    // A character's screen-time order within a tier comes from merge's output — cards read by filename are in slug
+    // lexicographic order, and without the order, "sorted by screen time" is empty words
     const orderPath = flag(rest, '--order', existsSync(join(dir, 'merged.json')) ? join(dir, 'merged.json') : null);
     let order = null;
     if (orderPath) {
@@ -1757,11 +1773,11 @@ function main(argv) {
       const list = Array.isArray(raw) ? raw : (raw.characters ?? []);
       order = list.map((e) => (typeof e === 'string' ? e : e?.name)).filter(Boolean);
     } else {
-      console.error(`⚠️ 没有 --order 也没有 ${join(dir, 'merged.json')}，同档角色将按文件名序而不是戏份序`);
+      console.error(`⚠️ no --order and no ${join(dir, 'merged.json')}; characters in the same tier will be ordered by filename rather than by screen time`);
     }
 
     if (problems.length) {
-      console.error(`✗ ${problems.length} 处问题：\n`);
+      console.error(`✗ ${problems.length} problem(s):\n`);
       for (const p of problems) console.error('  ' + p);
       process.exit(1);
     }
@@ -1771,7 +1787,7 @@ function main(argv) {
     const out = flag(rest, '--out');
     if (out) {
       writeFileSync(resolve(out), json, 'utf8');
-      console.log(`✓ ${cast.characters.length} 个角色 → ${resolve(out)}`);
+      console.log(`✓ ${cast.characters.length} characters → ${resolve(out)}`);
     } else {
       process.stdout.write(json);
     }
@@ -1780,36 +1796,36 @@ function main(argv) {
 
   if (cmd === 'validate') {
     const [castPath, bookPath] = rest;
-    if (!castPath) throw new Error('用法：validate <cast.json> <book.txt>');
+    if (!castPath) throw new Error('usage: validate <cast.json> <book.txt>');
     const { characters, summary, lang: castLang, ui } = loadCast(castPath);
     const lang = flag(rest, '--lang', castLang);
     const source = bookPath ? readFileSync(resolve(bookPath), 'utf8') : null;
-    if (!bookPath) console.error('⚠️ 没给原文，跳过逐字引文校验');
+    if (!bookPath) console.error('⚠️ no source text given; skipping the verbatim-quote check');
     const problems = validateCast(characters, source, lang);
-    // 顶层的故事摘要——报告要用，缺了就没法在顶部交代背景
+    // The top-level story summary — the report needs it, and without it the top of the report cannot set the scene
     if (typeof summary !== 'string' || !summary.trim()) {
-      problems.unshift('顶层缺少 summary（故事摘要），报告顶部会空着');
+      problems.unshift('top-level summary (story summary) is missing; the top of the report will be blank');
     }
-    // 内置表没有这个语言，又没给 ui 翻译 —— 报告界面会露出英文
+    // This language is not in the built-in table and no ui translation was given — the report UI will show English
     if (needsUiTranslation(lang) && !ui) {
       problems.unshift(
-        `lang=${lang} 不在内置界面语言（${SUPPORTED_UI_LANGS.join('/')}）里，` +
-          '顶层需要一份 ui 翻译，否则界面文案会是英文。' +
-          '用 `ui-template` 生成骨架后翻译填进去。',
+        `lang=${lang} is not a built-in UI language (${SUPPORTED_UI_LANGS.join('/')}); ` +
+          'the top level needs a ui translation, or the UI strings will be in English. ' +
+          'Generate a skeleton with `ui-template`, translate it, and put it in.',
       );
     }
     if (problems.length) {
-      console.error(`✗ ${problems.length} 处违规：\n`);
+      console.error(`✗ ${problems.length} violation(s):\n`);
       for (const p of problems) console.error('  ' + p);
       process.exit(1);
     }
-    console.log(`✓ ${characters.length} 个角色全部通过校验（lang=${lang}）`);
+    console.log(`✓ all ${characters.length} characters passed validation (lang=${lang})`);
     return;
   }
 
   if (cmd === 'render') {
     const [castPath] = rest;
-    if (!castPath) throw new Error('用法：render <cast.json> [--html|--md]');
+    if (!castPath) throw new Error('usage: render <cast.json> [--html|--md]');
     const html = rest.includes('--html');
     const imagesFlag = flag(rest, '--images');
     const sourceFlag = flag(rest, '--source');
@@ -1818,9 +1834,10 @@ function main(argv) {
     const lang = flag(rest, '--lang', castLang);
     const title = sourceFlag ?? source ?? basename(castPath).replace(/\.[^.]+$/, '');
 
-    // 图是用户在下游出好的素材，放哪由用户定：--images 按普通命令行路径解析，
-    // 不给才退回 cast.json 同级的 images/。报告默认写在 cast.json 旁边，
-    // src 写成相对那里的路径，整个目录一起挪也不断。图不存在就渲染成占位。
+    // Images are assets the user generated downstream, and where they live is the user's call: --images is resolved as a
+    // normal command-line path; only when absent does it fall back to images/ next to cast.json. The report is written next
+    // to cast.json by default, with src as a path relative to there, so moving the whole directory together does not break it.
+    // A missing image renders as a placeholder.
     const outDir = resolve(castPath, '..');
     const imagesDir = imagesFlag ? resolve(imagesFlag) : join(outDir, 'images');
     for (const c of characters) {
@@ -1840,7 +1857,7 @@ function main(argv) {
     const lang = rest[0] ?? '<lang>';
     console.log(
       JSON.stringify(
-        { note: `把下面每个值翻译成 ${lang}，整块放进 cast.json 的顶层 "ui"`, ui: uiTemplate() },
+        { note: `Translate every value below into ${lang}, then put the whole block into the top-level "ui" of cast.json`, ui: uiTemplate() },
         null,
         2,
       ),
@@ -1849,17 +1866,17 @@ function main(argv) {
   }
 
   if (cmd === 'slug') {
-    if (!rest[0]) throw new Error('用法：slug <name>');
+    if (!rest[0]) throw new Error('usage: slug <name>');
     console.log(slug(rest[0]));
     return;
   }
 
-  throw new Error(`未知命令 ${cmd}\n\n${USAGE}`);
+  throw new Error(`unknown command ${cmd}\n\n${USAGE}`);
 }
 
-// 只有直接运行才跑 CLI —— selftest.mjs 需要 import 这些函数。
-// 两边都取 realpath：软链安装时 argv[1] 是链接路径，而 import.meta.url
-// 已被 Node 解析成真实路径，不归一化就永远不相等。
+// Run the CLI only when executed directly — selftest.mjs needs to import these functions.
+// Take realpath on both sides: with a symlinked install, argv[1] is the link path while import.meta.url
+// has already been resolved by Node to the real path, so they never match without normalising.
 function isMainModule() {
   if (!process.argv[1]) return false;
   try {
@@ -1870,7 +1887,7 @@ function isMainModule() {
 }
 
 if (isMainModule()) {
-  // `render ... | head` 这类管道提前关闭时安静退出，别甩 EPIPE 堆栈
+  // Exit quietly when a pipe such as `render ... | head` closes early, rather than dumping an EPIPE stack
   process.stdout.on('error', (e) => {
     if (e.code === 'EPIPE') process.exit(0);
     throw e;

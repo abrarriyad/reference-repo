@@ -1,10 +1,9 @@
 # AGENTS.md
 
-## 行为规则
+## Behavior rules
 
-- 中文文案（README、SKILL.md、报告界面标签）不用单字词：「保留/砍掉/合并」不写成「保/砍/合」，「安装」不写成「装」，「使用」不写成「用」。章节标题同样适用。
-- skill 必须自包含、可单独拷走：不依赖任何第三方 skill（包括官方 skill）。外部方法论学习后内化成本仓库自己的 references 文档，注明学习来源。
-- **样例数据先定故事，再定分镜。** 反过来做会把自己焊死：画面一旦写实（「桌上摆着一封信，父亲按着不给」），之后每次「换故事」都只是给同一个动作换一个动机，三版听起来是同一版。故事没定之前不要写分镜、更不要出图。
-- **每个 skill 的样例数据必须是它自己的**，不借用兄弟 skill 的样例。借来的样例既是断链（skill 要能整个拷走），也只能展示别人那一种题材。
-- 渲染产物（`gallery.html`、`*-report.html`）不进版本控制，它们每次 `render` 都能重新生成。
-- **门失败累积（`.gates.jsonl` + `stats`）目前只在 novel-storyboard 上。** 这是有意的：先在真实项目里用一段时间，确认 `stats` 出来的东西真的指向了该改的规则，再决定要不要推广到其余五个。**如果长期没人打开它，说明这个功能不该做，推广只会把错误复制五份。** 不要主动再提推广。
+- A skill must be self-contained and copyable on its own: it must not depend on any third-party skill (official skills included). External methodology is learned, internalized into this repository's own references documents, and the source of the learning is noted.
+- **Settle the story of the sample data first, then the storyboard.** Doing it the other way round welds you in: once the picture becomes concrete ("a letter on the table, the father pressing it down and refusing to hand it over"), every later "change of story" merely gives the same action a different motive, and three versions sound like the same version. Until the story is settled, do not write the storyboard, and above all do not generate images.
+- **Each skill's sample data must be its own**, never borrowing a sibling skill's sample. A borrowed sample is both a broken link (a skill must be copyable away whole) and able to showcase only someone else's single genre.
+- Rendered artifacts (`gallery.html`, `*-report.html`) are not under version control; every `render` can regenerate them.
+- **Accumulating gate failures (`.gates.jsonl` + `stats`) currently exists only on novel-storyboard.** This is deliberate: use it in real projects for a while first, confirm that what `stats` produces really points at rules that should change, and only then decide whether to roll it out to the other five. **If nobody opens it for a long time, the feature should not have been built, and rolling it out would only copy the mistake five times.** Do not bring up rolling it out on your own initiative.

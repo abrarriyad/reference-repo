@@ -1,48 +1,48 @@
-# 写戏：一集怎么写
+# Writing the drama: how to write an episode
 
-一次任务写一集。你拿到 seed 骨架（目标秒数、钩子、悬念、认领爽点、候选场景人物）、大纲里这一集的梗概、场景卡与角色信息、前一集的结尾悬念。产出：把这一集的 `scenes` 从空写满。
+One task writes one episode. You are given the seed skeleton (target seconds, hook, suspense, claimed beats, candidate scenes and people), the outline's synopsis for this episode, the scene cards and character information, and the previous episode's closing suspense. Output: fill in this episode's `scenes` from empty to full.
 
-## 硬规则
+## Hard rules
 
-1. **时长预算先于一切。** 目标秒数就是墙：台词按 4.5 字/秒、动作按 2.5 秒/拍折算，写完跑 validate 看数。三分钟一集约 45–55 拍。**写超先砍动作，写欠补冲突不补寒暄。**
-2. **单句台词 ≤ 35 字，一口气说得完。** 长句拆成两句，中间可以插一拍动作或对方的反应。
-3. **谁的话像谁。** 船夫不说文言，小姐不说市井话。角色的性情、身份、说话方式在 outline 的角色表（有 cast.json 更全）里——写之前先读，写的时候盖着名字也认得出是谁在说话。
-4. **动作节拍一拍一件事，叙述体，动作要「常见」。** 「胡二爷的手停在半空，笑僵在脸上」是一拍；「气氛很尴尬」不是画面，写不得。动作里**不许出现引号台词**。
-   **常见动作是 AI 生成的生命线**——这条戏最终是视频模型演的，它只会演它见过千万次的动作：
+1. **The duration budget comes before everything.** Target seconds is the wall: dialogue is converted at 4.5 characters/second and action at 2.5 seconds/beat; after writing, run validate to see the numbers. A three-minute episode is about 45–55 beats. **If you wrote too much, cut action first; if too little, add conflict, not pleasantries.**
+2. **A single line of dialogue is ≤ 35 characters and can be said in one breath.** Split long lines into two, and an action beat or the other person's reaction can go between them.
+3. **Each person sounds like themselves.** The boatman does not speak literary Chinese, and the young lady does not speak street talk. A character's temperament, status and way of speaking are in the outline's cast table (more complete with a cast.json) — read it before writing, and write so that with the names covered you can still tell who is speaking.
+4. **An action beat is one thing per beat, in narrative voice, and the action must be "common".** "胡二爷's hand stops mid-air, the smile frozen on his face" is one beat; "the atmosphere is awkward" is not an image and cannot be written. **No quoted dialogue inside an action.**
+   **Common actions are the lifeline of AI generation** — this drama is ultimately performed by a video model, which can only perform actions it has seen tens of millions of times:
 
-   | 写法 | 例子 | 生成结果 |
+   | Style | Example | Generation result |
    | --- | --- | --- |
-   | ✗ 精确物理交互 | 货担撞上船帮，铜铃碎响。老周伸篙一挡，担子稳稳落进舱里 | 篙、担、船帮三物交互，必崩 |
-   | ✓ 常见动作 | 胡二爷挑着担子上船，老周搭手帮他把担子卸进舱里 | 挑担、搭手、放下，全是常见动作 |
+   | ✗ Precise physical interaction | The load strikes the gunwale, the bronze bell rings out in fragments. 老周 thrusts out a pole to block it, and the load drops steadily into the cabin | The pole, the load and the gunwale — three-object interaction, certain to collapse |
+   | ✓ Common action | 胡二爷 carries the load onto the boat, and 老周 lends a hand to unload it into the cabin | Carry a load, lend a hand, put it down — all common actions |
 
-   判据：这个动作在生活视频里常见吗？**上船、坐下、递东西、点头、回头、抱紧、站起来**——放心写；**用工具挡住某物、微表情（睫毛颤）、以寸计的位移（收了半寸）、比喻性画面（像被雾攥住的茧）**——改写或删。戏剧信息靠常见动作的**组合与时机**给，不靠动作本身的精巧。
-5. **每场至少一个动作节拍。** 三句台词之间没有一个画面动作，就该问自己这场戏观众在看什么。
-6. **钩子不是标签，是第一拍，而且要在运动中给。** 每集第 1 拍冷开场：钩子的具象必须带主体运动——**✗ 静物特写一闪（旧皮箱抱在怀里，指节掐白）✓ 抱着旧皮箱在雾里跑**。奔跑、追赶、挣脱、猛地按住，都行；静态细节特写（掐白的指节、口袋的轮廓）留给第二落点兑现（登船、开箱）。`hookBeat` 认领它——门查位置，必须落在全集前 3 拍内；有没有运动是写作纪律，门查不了。上一集的结尾悬念要在开场接住——接住不等于立刻解开。
-7. **结尾最后一拍必须是悬念。** 一句没说完的话、一个没解释的动作、一声来历不明的响。`cliff` 字段写效果说明，戏里落成具体的一拍。
-8. **认领的爽点要有戏扛。** `beatsClaimed` 里的每个爆点，这一集里必须有一段连续节拍在兑现它——爆点是演出来的，不是梗概里说说。
+   The test: is this action common in everyday video? **Boarding a boat, sitting down, handing something over, nodding, turning around, hugging tight, standing up** — write freely; **using a tool to block something, micro-expressions (eyelashes trembling), displacements measured in inches (retreating half an inch), figurative images (like a cocoon gripped by mist)** — rewrite or delete. Dramatic information is delivered by the **combination and timing** of common actions, not by the delicacy of the action itself.
+5. **At least one action beat per scene.** If there is not one on-screen action between three lines of dialogue, ask yourself what the audience is watching in this scene.
+6. **The hook is not a label, it is the first beat, and it must be given in motion.** Beat 1 of every episode is a cold open: the concrete form of the hook must carry the subject's movement — **✗ a flash of a still-life close-up (an old suitcase held to the chest, knuckles gripped white) ✓ running through the fog hugging an old suitcase**. Running, chasing, breaking free, slamming a hand down — all fine; static detail close-ups (white-gripped knuckles, the outline of a pocket) are saved for the second landing point to pay off (boarding, opening the suitcase). `hookBeat` claims it — the gate checks position, and it must fall within the first 3 beats of the episode; whether there is motion is writing discipline, which the gate cannot check. The previous episode's closing suspense must be picked up in the opening — picking it up does not mean resolving it at once.
+7. **The last beat of the ending must be suspense.** An unfinished sentence, an unexplained action, a sound of unknown origin. The `cliff` field gives the effect description, which in the drama lands as one concrete beat.
+8. **A claimed beat must have a scene carrying it.** For each big reveal in `beatsClaimed`, this episode must have a continuous run of beats paying it off — the reveal is performed, not just stated in the synopsis.
 
-## 修改纪律（错误最常从单点修改混进来）
+## Revision discipline (errors most often slip in from single-point edits)
 
-- **改一拍，连读三拍。** 任何节拍改动后，把前后各一拍连起来重读一遍，专查三样：**人物位置**（上一拍还在岸路，下一拍不能已经在栈桥上）、**道具在手状态**、**谁在场**。写作时空间状态在你脑子里，改的时候它不在——连读是把状态找回来的唯一办法。
-- **改画面，带声景。** 剧本动作一改，下游分镜的描述、声景、分镜图三处要一起动（分镜 skill 的教训，源头在剧本这层就要有意识）。
+- **Change one beat, re-read three.** After any beat is changed, read the beat before and the beat after together with it again, checking exactly three things: **character positions** (if the last beat was on the shore road, the next beat cannot already be on the pier), **what is in whose hands**, and **who is present**. While writing, the spatial state is in your head; during edits it is not — a continuous re-read is the only way to recover the state.
+- **Change the image, change the soundscape too.** Once a script action changes, the downstream storyboard's description, soundscape and storyboard image all have to move together (a lesson from the storyboard skill, to be kept in mind from the script layer at the source).
 
-## 手感规则（不设门，但决定戏好不好看）
+## Feel rules (no gate, but they decide whether the drama is good)
 
-- **台词短，动作密。** 短剧的对话节奏比电视剧快一倍——两三句就要有一次动作或反应插进来，超过四句连续对白就闷了。
-- **潜台词写进 delivery。**「嘴上让座，身子没动」这种表演层的信息放 `delivery`，别把潜台词直接写成台词说破。
-- **VO 省着用。** 心声是强调不是拐杖，一集两三条封顶；用在「表面平静、心里翻江倒海」的错位时刻最值。
-- **人群按大纲的 crowdPlan 拆。** 大纲说了三人以上同框怎么拆，写戏时就按那个方案调度——谁在前景说话、谁在背景反应，写清楚。
-- **场次切换是免费的，注意力不是。** AI 换景不要钱，但观众每换一次景要重新建立空间感。两分钟内换四个景，还不如在一个景里把戏拧紧。
+- **Short dialogue, dense action.** Short-drama dialogue rhythm is twice as fast as TV drama — within two or three lines an action or reaction must cut in, and more than four consecutive lines of dialogue feels stuffy.
+- **Write subtext into delivery.** Performance-layer information like "offers a seat in words, body does not move" goes in `delivery`; do not write the subtext as dialogue that gives it away.
+- **Use VO sparingly.** An inner voice is emphasis, not a crutch — two or three per episode at most; it is worth the most at moments of dislocation where "the surface is calm and inside is a storm".
+- **Split the crowd per the outline's crowdPlan.** The outline says how to break down three or more people in frame, so stage by that plan when writing the drama — who is speaking in the foreground and who is reacting in the background, written out clearly.
+- **Scene changes are free, attention is not.** AI scene changes cost nothing, but each time the scene changes the audience has to re-establish spatial sense. Changing scenes four times in two minutes is worse than tightening the drama within one scene.
 
-## 常见病
+## Common ailments
 
-| 病 | 症状 | 治法 |
+| Ailment | Symptom | Cure |
 | --- | --- | --- |
-| 广播剧 | 整场只有台词 | 每两三句台词之间插一拍画面动作 |
-| 文学病 | 动作写成美文：伸篙一挡、睫毛颤、退了半寸 | 换成常见动作，判据表见硬规则 4 |
-| 开场死画面 | 第一拍是静物特写 | 同一具象换成运动中给（抱箱在雾中跑），静帧挪到第二次出现 |
-| 空间跳变 | 上一拍在岸路跑，下一拍写栈桥才露出来——或反过来 | 改一拍连读三拍；人物位置是连续状态，跳变必须有走过去的拍 |
-| 注水 | 寒暄、让茶、问路占了半集 | 删。每一拍要么推进剧情要么翻转关系 |
-| 演讲癖 | 一个人连说四句 | 拆给对手，或用动作打断 |
-| 全知病 | 台词把信息说尽 | 信息藏进动作和 delivery，台词只说三分 |
-| 断头戏 | 结尾平收 | 最后一拍换成悬念，哪怕只是一声汽笛 |
+| Radio play | A whole scene with only dialogue | Insert one on-screen action beat between every two or three lines |
+| Literary disease | Actions written as fine prose: thrusting a pole to block, eyelashes trembling, retreating half an inch | Replace with common actions; see the test table in hard rule 4 |
+| Dead opening frame | Beat 1 is a still-life close-up | Give the same concrete form in motion (running through the fog hugging the suitcase), moving the still frame to its second appearance |
+| Spatial jump | The last beat running on the shore road, the next only reveals the pier — or the reverse | Change one beat, re-read three; character position is continuous state, and a jump needs a beat of walking over |
+| Padding | Pleasantries, offering tea and asking the way take up half an episode | Delete. Every beat must either advance the plot or flip a relationship |
+| Speech habit | One person speaking four lines in a row | Hand some to the opponent, or break it with an action |
+| Omniscience | Dialogue says all the information | Hide the information in actions and delivery; let the dialogue say only three tenths |
+| Headless drama | A flat ending | Change the last beat to suspense, even if it is only a steamer whistle |

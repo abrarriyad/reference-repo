@@ -1,185 +1,176 @@
-[![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-8b1a1a?style=for-the-badge)](README.md)
-[![English](https://img.shields.io/badge/English-f2e3e3?style=for-the-badge&labelColor=f2e3e3&color=b07070)](README.en.md)
-[![关注作者 X](https://img.shields.io/badge/%E5%85%B3%E6%B3%A8%E4%BD%9C%E8%80%85-%40eternityspring-b07070?style=for-the-badge&labelColor=8b1a1a&logo=x&logoColor=f2e3e3)](https://x.com/eternityspring)
+[![Follow on X](https://img.shields.io/badge/Follow-%40eternityspring-b07070?style=for-the-badge&labelColor=8b1a1a&logo=x&logoColor=f2e3e3)](https://x.com/eternityspring)
 
 # novel-characters
 
-丢一本小说或一篇短故事进去，输出每个角色的完整设定：
+Feed it a novel or a short story, and get a complete design bible for every character:
 
-- **角色表** — 谁出场了，主角还是龙套，跨章节的不同称呼归并到同一个人
-- **人物画像** — 性别、年龄、身份、外貌、性情、动机、人物弧光、关系网，每条附**原文逐字引文**
-- **形象提示词** — 双语出图 prompt + negative prompt + 标签，直接喂 Midjourney / SD / GPT-Image。画风不写进提示词，由调用方在出图时整批附加
-- **音色提示词** — 音色、音高、语速、口音、情绪，双语 voice-design prompt，直接喂 Qwen3-TTS / ElevenLabs Voice Design
-- **角色设定图的版面指令** — **每个角色一条**：16:9 分三区，左侧约 34% 证件照式半身像（面部基准）、右上全身三视图、右下关键细节特写条，白底方便抠图。**本 skill 不出图**，交付的是这段指令
-- **关系图谱** — 报告里的一个全景视图：谁跟谁有关系、是什么关系，一眼看完。悬停一个人亮出他的全部关系，点一下跳到那个人的详情
+- **Cast list** — who appears, how central they are, with every name a character is called by folded into one person
+- **Profile** — gender, age, standing, appearance, temperament, motivation, arc, relationships, each backed by **verbatim quotes from the source**
+- **Design prompts** — bilingual image prompt + negative prompt + tags, ready for Midjourney / SD / GPT-Image. The look is not written into the prompt: the caller prepends one style instruction to the whole batch at generation time
+- **Voice prompts** — timbre, pitch, pace, accent, emotion, plus a voice-design prompt for Qwen3-TTS / ElevenLabs Voice Design
+- **A character model sheet** — **one per character**: a 16:9 image in three zones: an ID-photo-style bust on the left (~34%, the reference for the face design), a full-body turnaround top-right, and a strip of key-detail close-ups bottom-right. White background for clean cut-out. **This skill does not generate the image** — the instruction is the deliverable
+- **Relationship map** — a whole-cast view inside the report: who is tied to whom, and how. Hover a character to light up every link they are part of, click to jump to their profile
 
-产出 `cast.json` + Markdown + 一个双击就能开的 `report.html`。
+Outputs `cast.json`, a Markdown report, and a self-contained `report.html` you can just double-click.
 
-**报告语言可指定**，默认中文：
+**Any output language**, Chinese by default:
 
 ```
 /novel-characters ./book.txt --lang en
 /novel-characters ./book.txt --lang ja
 ```
 
-内置 **中文 / English / 日本語** 三套界面文案。**其他语言一样支持**——skill 会现场把界面文案翻译成目标语言，存进 `cast.json` 的 `ui` 字段，渲染时合并进去。所以法语、韩语、西班牙语都能出完整报告，不会露出英文界面。
-
-想自己准备翻译：
-
-```bash
-node scripts/novel-characters.mjs ui-template fr   # 打印待翻译的骨架
-```
+Chinese, English and Japanese UI strings ship built in. **Other languages work too** — the skill translates the UI labels on the fly into the target language and stores them in `cast.json` under `ui`, so French, Korean or Spanish reports come out fully localized rather than half-English.
 
 ![report.html](assets/report.webp)
 
-角色设定图（自带样例《渡口》的沈知微）：
+A character model sheet (Shen Zhiwei, from the bundled sample story):
 
-![角色设定图](assets/sheet.jpg)
+![model sheet](assets/sheet.jpg)
 
-## 上游
+## Upstream
 
-管线里**大纲在角色的上游**：
+In the pipeline the **outline sits upstream of the character bible**:
 
 ```
-novel-outline    → outline.json （什么：结构与分集，谁进谁不进）
-novel-characters → cast.json    （谁：角色资产）
+novel-outline    → outline.json (what: structure & episodes, who is in)
+novel-characters → cast.json    (who: character assets)
 ```
 
-有 `outline.json` 就走 `seed`——它的 `characters` 块已经定死了角色清单：
+If you have an `outline.json`, start with `seed` — its `characters` block already settles the roster:
 
 ```bash
 node scripts/novel-characters.mjs seed outline.json > seed.json
 ```
 
-搬过来的是大纲拍板过的事实（角色码、名字、分档、人物线、由原著的谁合并而来），留空的是这一层才该做的设计（别名、画像、形象提示词、音色提示词）。`tier` 映射成 `importance`：`lead` → protagonist、`support` → supporting、`functional` → minor。
+What comes across is what the outline already decided (character id, name, tier, arc, which source characters were merged into this one); what is left blank is the work this layer owes (aliases, profile, design prompt, voice prompt). `tier` maps onto `importance`: `lead` → protagonist, `support` → supporting, `functional` → minor.
 
-**大纲定的分档不要在这一层推翻**，觉得不对回去改大纲。主角组内部可以细分——`lead` 是「男女主 + 主反派」一整组，seed 一律给 protagonist，照 `seedNote` 里的定位把主角之外的改成 major。
+**Do not overturn the outline's tiers here**; if a tier looks wrong, go fix the outline. Splitting *within* the lead group is fine — `lead` covers leads plus the main antagonist, so `seed` assigns protagonist to all of them and you demote the non-leads to major using the `role` recorded in `seedNote`.
 
-**没有 `outline.json` 也照常跑**，本 skill 不依赖它——跳过 seed，直接丢一本小说进去，自己从原文拆角色表。
+**It runs fine without one** — this skill does not depend on it. Skip `seed`, feed it a raw novel, and it builds the roster from the text itself.
 
-## 使用
+## Use
 
-安装见[仓库根 README](../../README.md)。装好后：
+For installation see the [repository README](../../README.md). Then:
 
 ```
-/novel-characters ./你的小说.txt
+/novel-characters ./your-novel.txt
 ```
 
-或者直接说「帮我拆一下这本书的角色」并给出路径。
+Or just say "break this book down into characters" and give it the path.
 
-### 报告语言
+### Report language
 
-默认中文。用 `--lang`，或者直接说「用英文」「日本語で」：
+Chinese by default. Use `--lang`, or just ask in words:
 
 ```
 /novel-characters ./book.txt --lang en
 /novel-characters ./book.txt --lang ja
 ```
 
-内置 **中文 / English / 日本語** 三套界面文案。**其他语言一样支持**——skill 会现场把界面文案翻译成目标语言，存进 `cast.json` 的 `ui` 字段，渲染时合并。法语、韩语、西班牙语都能出完整报告，不会露出英文界面。
+Chinese, English and Japanese UI strings ship built in. **Any other language works too** — the skill translates the UI labels into the target language on the fly and stores them in `cast.json` under `ui`, so French, Korean or Spanish reports come out fully localized rather than half-English.
 
-两条不跟随语言：**出图和 TTS 提示词永远英文**（引擎吃英文最稳）；**原文引文永远保持原文语言**（翻译了就不是证据了）。
+Two things never follow the language: **image and TTS prompts stay English** (those engines work best that way), and **source quotes stay in the original language** (translate them and they stop being evidence).
 
-## 报告长什么样
+## What the report looks like
 
-三栏工作台：顶栏搜索，左栏是故事摘要 + 按戏份排的角色列表，主区一次只看一个角色。
+A three-column workbench: search on top, synopsis plus a prominence-ordered cast list on the left, one character at a time in the main area.
 
-**关系图谱**在左栏顶部，跟角色详情互斥。边直接来自每个角色的 `relationships`，不用模型再跑一趟：
+The **relationship map** sits at the top of the left rail and takes over the main area. Its edges come straight from each character's `relationships` — no extra model pass:
 
-- 按**名字 + 别名**连边——老周的关系里写「老伯」也连到同一个节点
-- 同一对人的两条单向记述合并成一条边，两个方向的说法都留着
-- 弦上标一段关系文字（截到 6 字，全文在悬停提示和右侧关系表里）。边多了会糊，
-  ≤ 14 条默认标出来，再多默认收起，顶部有开关
-- 悬停一个人亮出他的全部关系线，悬停关系表某一行只亮那一条，点谁跳谁
+- Edges resolve by **name *and* alias**, so a relationship written as "老伯" still lands on 老周's node
+- Two one-directional accounts of the same pair collapse into one edge, keeping both wordings
+- Each chord carries a short label (6 characters, full text in the tooltip and the side list). Labels get noisy on a large cast, so they are on by default up to 14 edges and off above that, with a toggle in the header
+- Hover a character to light up every link they are part of, hover a row to isolate one link, click either to open that character
 
-圆环布局在 Node 里算好直接写进内联 SVG，**不引任何库**——report.html 始终是一个能离线双击打开的单文件。
+The circular layout is computed in Node and written straight into inline SVG — **no libraries**, so report.html stays a single file you can open offline.
 
-### 导出 JSON
+### Export JSON
 
-顶栏的「导出 JSON」下载的**就是 `cast.json` 本身的形状**，不是另一套导出格式：
+The **Export JSON** button in the top bar downloads exactly the `cast.json` shape — not some separate export format:
 
 ```json
 { "source": "…", "lang": "zh", "summary": "…", "characters": [ … ] }
 ```
 
-所以外部工具改完可以**直接喂回 `render` 重新出报告**，也能过 `validate`。角色卡里的 `sheetImage` 一并带出，拿得到哪张图对应哪个人——图由下游出，`render --images <目录>` 指到图所在的目录就会捡起来（不给就找 cast.json 同级的 `images/`）。
+So an external tool can edit it and **feed it straight back into `render`**, and it still passes `validate`. Each character keeps its `sheetImage` path, so you know which sheet belongs to whom — point `render --images <dir>` at wherever the generated sheets live and it picks them up (without the flag it looks in `images/` next to cast.json).
 
-数据以 `<script type="application/json">` 内嵌在报告里，点导出只是把它包成 Blob 下载，**不发任何网络请求**。
+The data is embedded as `<script type="application/json">`; exporting just wraps it in a Blob and downloads it — **no network request**.
 
-## 它是怎么工作的
+## How it works
 
-长文本一次性塞进上下文会丢角色，所以拆成两趟：
+Feeding a long text into one context window loses characters, so it runs in two passes:
 
-**第一趟 · 扫描**（便宜）
-按段落切成 4 万字符的重叠块，每块并发抽「角色名 + 别名 + 该块里的具体描写 + 逐字引文」。重叠是为了让卡在切口上的角色两边都能看见。
+**Pass 1 — scan** (cheap model)
+The text is split on paragraph boundaries into overlapping 40k-character chunks. Each chunk is scanned in parallel for character names, aliases, concrete description, and verbatim quotes. The overlap is what keeps a character introduced right at a chunk seam visible to both sides.
 
-**归并**
-按名字和别名建索引，`陆行远` / `陆` / `姑娘` 这类跨块的不同叫法收敛成同一个人。精确匹配管不到的（「陆」和「陆行远」没有共同键），脚本会按名字包含关系列成 `mergeCandidates` 疑似同人候选，由模型复核后写成 merges.json 确定性落地合并。按出现块数当戏份权重排序。
+**Merge**
+Names and aliases are indexed together, so different forms of address across chunks converge onto one person. Where exact matching cannot reach (「陆」 and 「陆行远」 share no key), the script lists containment-based `mergeCandidates` for the model to review; confirmed merges are applied deterministically from a merges.json. Characters are ranked by how many chunks mention them — that ranking is the proxy for screen time.
 
-**第二趟 · 出卡**
-只对戏份最重的 N 位（**默认 30**），把归并后的全部描写喂进去，一次生成完整角色卡。同批角色互相知道对方的名字，避免长相和声线撞车。族裔、年代、地域从原文推断后写死进出图提示词——**不跟报告语言走**，报告出成日文不会把民国的老船夫画成日本人。
+**Pass 2 — profile**
+Only the top N characters (**30 by default**) get a full sheet, built from every observation merged for them. Each one is told the names of its siblings in the same cast, so their looks and voices don't collapse into each other. Ethnicity, era and region are inferred from the source and written explicitly into the image prompts — **they do not follow `--lang`**. Rendering the report in Japanese does not turn a Republican-era Chinese ferryman into a Japanese man.
 
-**校验**（这步不能跳）
-三类硬规则，全部由脚本确定性检查，不靠模型自觉：
+**Validate** (never skipped)
+Three hard rules, all checked deterministically by a script rather than trusted to the model:
 
-| 规则 | 为什么 |
+| Rule | Why |
 | --- | --- |
-| `evidence` 必须是原文**逐字连续**片段 | 防编造。被「他说」断开的对白不许拼接 |
-| 出图 prompt **不许出现人名** | 图像模型对人名偏见极重，会画成它记忆里的角色 |
-| 字段**语言分工** | 人类字段跟随 `--lang`、出图和 TTS 提示词永远英文，模型会漂 |
-| 结构 + 枚举 | `importance` 只能是那四个值 |
+| `evidence` must be a **verbatim, contiguous** span of the source | Stops invention. Dialogue split by a narration beat may not be stitched back together |
+| Image prompts must **not contain character names** | Image models bias hard on names and will draw the character they remember instead of yours |
+| **Language split** per field | Human-readable fields follow `--lang`, image and TTS prompts are always English — the model drifts otherwise |
+| Structure and enums | `importance` is one of exactly four values |
 
-这三条不是拍脑袋定的——是模型输出真的违反过、被校验脚本当场抓住才立起来的。
+None of these were written up front. Each one exists because real model output violated it and the validator caught it.
 
-## 命令行直接用
+## Use the scripts directly
 
-脚本本身不需要 agent 也能跑，只有两趟模型调用需要：
+The helpers run fine without an agent — only the two model passes need one:
 
 ```bash
-node scripts/novel-characters.mjs seed outline.json              # 有大纲就从它预填角色表骨架
-node scripts/novel-characters.mjs chunk book.txt /tmp/wk        # 切块
-node scripts/novel-characters.mjs merge /tmp/wk                 # 归并 roster-*.json，附疑似同人候选
-node scripts/novel-characters.mjs merge /tmp/wk --apply m.json   # 落地复核后的合并
-node scripts/novel-characters.mjs assemble /tmp/wk --source 书名 # card-*.json 合成 cast.json，同档按戏份排序
-node scripts/novel-characters.mjs validate cast.json book.txt   # 校验
-node scripts/novel-characters.mjs render cast.json --html       # 出 report.html
-node scripts/novel-characters.mjs slug "胡二爷"                  # 安全文件名
+node scripts/novel-characters.mjs seed outline.json              # seed the roster from an outline, if you have one
+node scripts/novel-characters.mjs chunk book.txt /tmp/wk        # split
+node scripts/novel-characters.mjs merge /tmp/wk                 # merge roster-*.json, with merge candidates
+node scripts/novel-characters.mjs merge /tmp/wk --apply m.json   # apply reviewed merges
+node scripts/novel-characters.mjs assemble /tmp/wk --source Book # combine card-*.json into cast.json, prominence-ordered
+node scripts/novel-characters.mjs validate cast.json book.txt   # validate
+node scripts/novel-characters.mjs render cast.json --html       # build report.html
+node scripts/novel-characters.mjs slug "胡二爷"                  # filesystem-safe name
 ```
 
-## 边界
+## Limits
 
-- 单次上限 24 块（净覆盖约 93 万字符）。超了会明确报 `truncated`，**不静默截断**
-- 人类可读字段跟随 `--lang`；出图和 TTS 提示词**永远英文**，那些引擎吃英文最稳，跟报告语言无关
-- 默认取戏份最重的 30 位角色，每位一份完整角色卡。想少要就直接给个数，或者说只要主要角色
-- **画风不进提示词**：它是出图那一刻由下游整批附加在提示词前面的一层。早期把画风写死进每条提示词能压住一部分漂移，代价是换风格要逐条改，而且跟当时选的那一档正面打架。同一批角色的一致性因此也归下游管，见 `references/sheet.md`
+- Caps at 24 chunks (~930k characters net of overlap) per run. Beyond that it reports `truncated` explicitly — it does **not** silently drop the tail
+- Human-readable fields follow `--lang`; image and TTS prompts are **always English**, since those engines work best that way regardless of report language
+- The top 30 characters by prominence are profiled by default, and **every one of them gets a sheet** — one call per character, so this is the slowest step on a large cast. Ask for a smaller number, or for leads only, if you want it shorter
+- **Style stays out of the prompts.** It is a layer the downstream generator prepends to the whole batch at generation time. Pinning a look into every prompt used to suppress some drift, but it froze each prompt to one style and fought whatever the caller picked. Consistency across a cast is therefore the generator's problem; see `references/sheet.md`
 
-## 文件
+## Files
 
 ```
-SKILL.md                 给 agent 读的工作流
+SKILL.md                 the workflow the agent reads
 scripts/
   novel-characters.mjs   chunk / merge / assemble / validate / render / slug
-  selftest.mjs           329 项断言，不调模型
+  selftest.mjs           329 assertions, never calls a model
 references/
-  roster-pass.md         第一趟：扫描角色
-  profile-pass.md        第二趟：生成角色卡（8 条硬规则）
-  schema.md              角色卡结构 + 字段语言归属
-  sheet.md               角色设定图的版面规格
-  report-style.md        report.html 的设计约定
+  roster-pass.md         pass 1: scanning for characters
+  profile-pass.md        pass 2: building a character sheet (8 hard rules)
+  schema.md              sheet structure and which language each field takes
+  sheet.md               layout spec for the model sheet
+  report-style.md        design conventions for report.html
 examples/
-  渡口.txt                自带短故事，4 个角色
-  渡口-cast.json          产出，同时是校验自检夹具
-  渡口-cast.md            渲染结果，质量基准
+  渡口.txt                bundled short story, 4 characters
+  渡口-cast.json          its output, doubling as the validation fixture
+  渡口-cast.md            rendered result, a quality baseline
 ```
 
-`examples/渡口.txt` 里货郎全程只有绰号、船夫只被叫过「老伯」——专门用来验别名归并。
+In `examples/渡口.txt` the peddler is only ever referred to by a nickname and the ferryman is addressed once as "old uncle" — the story exists specifically to exercise alias merging.
 
-## 自测
+## Self-test
 
 ```bash
 node scripts/selftest.mjs
 ```
 
-329 项断言，覆盖分块 / 别名归并 / 合成 / 多语言 / 校验 / 渲染。不调模型、不花额度、1 秒跑完。改完脚本先跑这个。
+329 assertions across chunking, alias merging, assembly, localization, validation, and rendering. No model calls, no quota, runs in about a second. Run it before anything else after touching the scripts.
 
-**只在 macOS + Node 24 上实测过。** 代码没有平台相关调用，Linux 和更低版本 Node 理论上没问题，但**没验过**。
+**Only tested on macOS with Node 24.** There is no platform-specific code, so Linux and older Node releases should be fine, but that is **unverified**.

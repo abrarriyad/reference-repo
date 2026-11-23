@@ -1,18 +1,18 @@
-# 第一趟 · 扫描角色
+# Pass 1 · Scan for characters
 
-给一段原文，抽出这段里出现的所有角色。**只输出 JSON，不要任何解释、不要 markdown 围栏。**
+Given a stretch of source text, extract every character that appears in it. **Output JSON only, with no explanation and no markdown fence.**
 
-## 规则
+## Rules
 
-- 列出这段里每一个有名有姓、或虽无名但明确是独立个体的角色。没名字的用描述性标签，比如「摆渡的老头」。
-- 同一个人的称谓、绰号、正式名合并成一条，`name` 取原文里用得最多的那个形式。
-- **不要编造角色。** 地名、组织、动物除非像角色一样行动，否则不算。
-- `note` 要密集：长什么样、怎么说话、做了什么。**后一趟看不到原文，只看得到你写的 note**，所以细节必须落在 note 里。
-- 记录身份、职业、经济条件，以及原文明说的服装、面料、发饰、随身物件、仪态和穿戴场合；把日常造型与乔装、落难、礼服等特殊状态分开。区分本人的外观与身边侍从/亲属的外观，不把合并角色的叙事功能当成主人物的衣着或身份。没有外观描写就明确记为缺失，不在扫描阶段编造；优先保留能佐证这些信息的原文片段。
-- `quotes` 和 `note` 不是一回事：从原文里**逐字复制**片段，**保持原文语言，不许翻译成英文**。**不许把被叙述打断的对白拼起来**——如果一句话被「他说」隔开，只取其中一侧，不要合并两侧。
-- 叙述者除非本身是故事里的角色，否则忽略。
+- List every character in this stretch that has a proper name, or that is nameless but clearly an independent individual. For the nameless, use a descriptive label, e.g. "the old ferryman".
+- Merge the forms of address, nicknames and formal names of the same person into one entry, with `name` set to the form used most often in the source.
+- **Do not invent characters.** Place names, organisations and animals do not count unless they act like characters.
+- `note` must be dense: what they look like, how they speak, what they do. **The next pass cannot see the source, only the note you wrote**, so the detail must land in the note.
+- Record identity, occupation and economic condition, and any clothing, fabric, hair ornament, carried item, bearing and occasion of dress the source states explicitly; keep everyday looks separate from special states such as disguise, destitution or formal dress. Distinguish a person's own appearance from that of the attendants / relatives around them, and do not take a merged character's narrative function as the main character's clothing or identity. If there is no appearance description, record it explicitly as missing rather than inventing it at the scanning stage; prefer keeping the source passages that can corroborate this information.
+- `quotes` and `note` are not the same thing: **copy passages verbatim** from the source, **keeping the source language — do not translate them into English**. **Do not stitch together dialogue interrupted by narration** — if a sentence is split by "he said", take only one side, do not join both.
+- Ignore the narrator unless they are themselves a character in the story.
 
-## 输出格式
+## Output format
 
 ```json
 {
@@ -27,4 +27,4 @@
 }
 ```
 
-字段都是必填。`aliases` 和 `quotes` 没有就给空数组。
+All fields are required. If there are no `aliases` or `quotes`, give an empty array.

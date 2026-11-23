@@ -1,45 +1,45 @@
-# 分镜图的提示词与挂图合同
+# Frame prompt and reference-image contract
 
-本 skill **不出图**，交付的是每一格的画面提示词和它该挂哪些参考图。出图在下游；
-模型与画风由下游选择，画幅必须遵守 storyboard.json 顶层的 `aspectRatio`。
+This skill **does not generate images**; the deliverable is the picture prompt for each frame and which reference images it should carry. Generation is downstream;
+the model and style are chosen downstream, and the aspect ratio must follow the top-level `aspectRatio` of storyboard.json.
 
-下面两节是给下游的合同：「挂图挂什么」决定这一格能不能跟上游资产对上，
-漏挂哪怕一件都会让模型当场发明一个（踩过）。
+The two sections below are the contract for downstream: "what references to attach" decides whether this frame lines up with the upstream assets.
+Miss even one and the model will invent it on the spot (hit in production).
 
-## 分镜图是什么
+## What a frame is
 
-一个分镜一张关键帧，画幅取 storyboard.json 顶层 `aspectRatio`：默认 `16:9`，竖屏剧使用 `9:16`。同一份 storyboard 的全部分镜图必须保持同一画幅。**每段一个文件夹**：`<段号>/f<切序>.png`（f1 = 主分镜图），H3 提示词由 `export` 写成同文件夹里的 `prompt.md`（头部对照表明确 f1.png 是首帧、各图钉在第几秒）——整个文件夹拖给 H3 就是一次生成。第 1 切的是**主分镜图**（H3 对齐指令把它钉在 0.00 秒），其余是**子分镜图**（各钉在自己的切点时刻）——一段的每一格构图都由图控制，不靠文字赌。**它是资产合成，不是凭空画**：场景、角色、道具长什么样已经由上游设定图定死，分镜图只负责把它们按这一格的构图摆进同一帧。
+One keyframe per cut, with the aspect ratio taken from the top-level `aspectRatio` of storyboard.json: `16:9` by default, `9:16` for a vertical drama. All frames in the same storyboard must keep the same aspect ratio. **One folder per segment**: `<segment id>/f<cut index>.png` (f1 = the master frame), and `export` writes the H3 prompt as `prompt.md` in the same folder (its header table states plainly that f1.png is the first frame and which second each image pins) — drag the whole folder to H3 and that is one generation. The first cut is the **master frame** (the H3 alignment instruction pins it at 0.00s), and the rest are **sub-frames** (each pinned at its own cut mark) — every frame's composition in a segment is controlled by the images, not gambled on text. **It is asset composition, not drawing from nothing**: what the scene, characters and props look like has already been settled by the upstream sheets, and the frame is only responsible for arranging them into the same image per this frame's composition.
 
-## 参考图挂载（命根子）
+## Attaching reference images (the lifeline)
 
-每一格出图时要挂的参考图清单——这份清单是本 skill 的交付物之一，报告里的「生成批次单」就是它：
+The list of reference images each frame should carry at generation time — this list is one of this skill's deliverables, and the report's "generation batch list" is exactly it:
 
-1. **场景设定图**（`novel-art` 的 `images/<场景名>-sheet.png`）——必挂，环境、材质、光的唯一标准
-2. **画内每个角色的设定图**（`novel-characters` 的 `images/<角色名>-sheet.png`）——有几个挂几个
-3. **画内叙事道具的设定图**（`novel-art` 的 `images/<道具名>-sheet.png`）——有就挂
-4. **链式参考**：某角色没有设定图时，先出他看得最清的那一格，之后所有带他的格都拿这张当身份参考（提示词明写 the SAME face, same clothes as this reference）——同集的脸不许换人。段的主分镜图也值得一直挂着，锁世界观和雾的浓度
-5. **挂图按「画面里有什么」，不按「段属于哪个场」**：段在栈桥场，但画面里出现了渡船，就必须把渡船的设定图也挂上——不挂 = 每帧发明一条新船（踩过）。船、马车、宅门这类「会入画的大资产」都同理
-6. **提示词必须写明人物此刻的位置状态**：已上船 / 在舱内 / 站在桥头——切镜时人物位置是连续的剧情状态，只写构图不写状态，模型会把上了船的人又画回岸上（踩过）
+1. **Scene sheet** (`novel-art`'s `images/<scene name>-sheet.png`) — always; the sole standard for environment, material and light
+2. **A sheet for each character in frame** (`novel-characters`' `images/<character name>-sheet.png`) — one per character present
+3. **A sheet for each narrative prop in frame** (`novel-art`'s `images/<prop name>-sheet.png`) — attach when available
+4. **Chained reference**: when a character has no sheet, first generate the frame where they are seen most clearly, then use that image as the identity reference for every later frame containing them (the prompt states plainly the SAME face, same clothes as this reference) — a face must not change person within an episode. The segment's master frame is also worth keeping attached, to lock the world and the thickness of the fog
+5. **Attach references by "what is in the picture", not by "which scene the segment belongs to"**: the segment may be on the bridge, but if a ferry appears in frame its sheet must be attached too — no attachment = a new boat invented every frame (hit in production). The same applies to any "large asset that gets into frame" such as boats, carriages or gatehouses
+6. **The prompt must state each character's current position state**: already aboard / inside the cabin / standing on the bridgehead — across cuts a character's position is a continuous story state, and writing only composition without state will make the model draw a character who has boarded back onto the bank (hit in production)
 
-提示词开头明说每张参考图的用途（which is the environment / whose face to match / which prop to match），别让模型猜。
+The prompt should state at the start what each reference image is for (which is the environment / whose face to match / which prop to match); do not make the model guess.
 
-## 提示词末尾固定一句
+## A fixed sentence at the end of the prompt
 
 `No text, no watermark, no borders — a single clean full-bleed frame.`
 
-分镜图是干净的一帧，不是设定图——不要格子边框。这句不写，模型会照着上游那些
-带分隔线的设定板画。
+A frame is a clean single image, not a model sheet — no grid borders. Leave this out and the model will draw after the upstream model boards,
+with their dividing rules.
 
-## 下游出图时（写给消费方）
+## At downstream generation time (written for the consumer)
 
-- **一镜一次调用，绝不批量**
-- **默认先出第一段的整套**（主 + 子共 3–5 张）给用户看效果——画风、资产一致性、
-  正反打构图对了再往后补。一集约 30–40 格就是同样次数的调用，方向错了整批重来
-- 单个失败跳过不阻断，最后汇总说明
+- **One call per shot, never batched**
+- **Generate the whole first segment first by default** (master + sub-frames, 3–5 images) to show the user the result — once the style, asset consistency
+  and shot–reverse-shot composition are right, fill in the rest. An episode of about 30–40 frames is the same number of calls, and a wrong direction means redoing the whole batch
+- Skip a single failure without blocking; summarise at the end
 
-## 拿到图先扫一眼（验收口径）
+## Glance over the image when you get it (acceptance criteria)
 
-- 和场景设定图是不是同一个世界（材质、光、旧化程度）
-- 角色的脸和衣服对不对得上角色设定图
-- 景别对不对（提示词写 close-up 出来却是全景 → 重生成）
-- 有没有多出来的人（背景围观群众是最常见污染）——多人就重生成
+- Is it the same world as the scene sheet (material, light, degree of weathering)
+- Do the character's face and clothing match the character sheet
+- Is the shot size right (the prompt says close-up but a wide comes out → regenerate)
+- Are there extra people (background onlookers are the commonest contamination) — with extra people, regenerate
